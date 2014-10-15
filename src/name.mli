@@ -46,6 +46,4 @@ value next_chars_if_equiv :
 value unaccent_utf_8 : bool -> string -> int -> (string * int);
 value nbc : char -> int;
 
-value utf_8_db : ref bool;
-
 value forbidden_char : list char ;

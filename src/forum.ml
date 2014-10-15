@@ -237,9 +237,7 @@ value get_var ic lab s =
   else ("", s)
 ;
 
-value size_of_char s i =
-  if Mutil.utf_8_db.val then max 1 (Name.nbc s.[i])
-  else 1
+value size_of_char s i = max 1 (Name.nbc s.[i])
 ;
 
 value string_length s i =

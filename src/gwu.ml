@@ -73,7 +73,7 @@ value no_picture = ref False;
 value gen_correct_string no_num no_colon s =
   let s = strip_spaces s in
   let s =
-    if Mutil.utf_8_db.val || raw_output.val then s
+    if raw_output.val then s
     else Mutil.utf_8_of_iso_8859_1 s
   in
   loop 0 0 where rec loop i len =

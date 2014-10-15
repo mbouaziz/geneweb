@@ -10,8 +10,7 @@ value string_sub s i len =
   let len = min (String.length s - i) (max 0 len) in String.sub s i len
 ;
 
-value utf_8_intern_byte c =
-  utf_8_db.val && Char.code c >= 0x80 && Char.code c < 0xC0;
+value utf_8_intern_byte c = Char.code c >= 0x80 && Char.code c < 0xC0;
 
 value designation base p =
   let first_name = p_first_name base p in
@@ -200,15 +199,13 @@ value alphabetic_iso_8859_1 n1 n2 =
 
 value alphabetic n1 n2 =
 (*
-  if utf_8_db.val then alphabetic_utf_8 n1 n2 else alphabetic_iso_8859_1 n1 n2
+  why not alphabetic_utf_8 ?
 *)
   alphabetic_iso_8859_1 n1 n2
 (**)
 ;
 
-value alphabetic_order n1 n2 =
-  if utf_8_db.val then alphabetic_utf_8 n1 n2 else alphabetic_iso_8859_1 n1 n2
-;
+value alphabetic_order = alphabetic_utf_8;
 
 value arg_list_of_string line =
   loop [] 0 0 None where rec loop list i len quote =

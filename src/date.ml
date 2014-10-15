@@ -52,7 +52,7 @@ value death_symbol conf =
     [ Not_found -> None ]
   with
   [ Some x -> x
-  | None -> if utf_8_db.val then "†" else "+" ]
+  | None -> "†" ]
 ;
 
 value birth_symbol conf =
@@ -61,7 +61,7 @@ value birth_symbol conf =
     [ Not_found -> None ]
   with
   [ Some x -> x
-  | None -> if utf_8_db.val then "°" else "°" ]
+  | None -> "°" ]
 ;
 
 value before_date d d1 =

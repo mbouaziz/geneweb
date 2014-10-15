@@ -73,35 +73,16 @@ value combine_by_count list =
 ;
 
 value alphab_string conf base is_surname s =
-  if is_surname then
-    if Mutil.utf_8_db.val then
-      surname_end base s ^ surname_begin base s
-    else old_surname_end s ^ old_surname_begin s
+  if is_surname then surname_end base s ^ surname_begin base s
   else s
 ;
 
-value lower_if_not_utf8 s =
-  if Mutil.utf_8_db.val then s else Name.lower s
-;
-
-value capitalize_if_not_utf8 s =
-  if Mutil.utf_8_db.val then s else String.capitalize s
-;
-
-value lowercase_if_not_utf8 s =
-  if Mutil.utf_8_db.val then s else String.lowercase s
-;
-
-value new_name_key base s =
+value name_key_compatible base s =
   let part = Util.get_particle base s in
   if part = "" then s
   else
     let i = String.length part in
     String.sub s i (String.length s - i) ^ " " ^ String.sub s 0 i
-;
-
-value name_key_compatible base s =
-  if Mutil.utf_8_db.val then new_name_key base s else Mutil.name_key s
 ;
 
 (* print *)
@@ -117,23 +98,20 @@ value print_title conf base is_surnames ini len = do {
     Wserver.wprint "%s"
       (capitale (transl_nth conf "first name/first names" 0));
   if ini <> "" then
-    Wserver.wprint " %s %s" (transl conf "starting with")
-      (capitalize_if_not_utf8 ini)
+    Wserver.wprint " %s %s" (transl conf "starting with") ini
   else
     Wserver.wprint " (%d %s)" (nb_of_persons base)
       (Util.translate_eval ("@(c)" ^ transl_nth conf "person/persons" 1));
 };
 
 value displayify s =
-  if Mutil.utf_8_db.val then
-    loop 0 0 where rec loop i len =
-      if i = String.length s then Buff.get len
-      else
-        let nbc = Name.nbc s.[i] in
-        if nbc < 0 || i + nbc > String.length s then
-          Buff.get (Buff.mstore len "...")
-        else loop (i + nbc) (Buff.gstore len s i nbc)
-  else String.capitalize s
+  loop 0 0 where rec loop i len =
+    if i = String.length s then Buff.get len
+    else
+      let nbc = Name.nbc s.[i] in
+      if nbc < 0 || i + nbc > String.length s then
+        Buff.get (Buff.mstore len "...")
+      else loop (i + nbc) (Buff.gstore len s i nbc)
 ;
 
 value tr c1 s2 s =
@@ -192,19 +170,17 @@ value print_alphabetic_all conf base is_surnames ini list len = do {
   tag "p" begin
     List.iter
       (fun (ini_k, _) ->
-         let ini = capitalize_if_not_utf8 ini_k in
-         stagn "a" "href=\"#%s\"" ini begin
-           Wserver.wprint "%s" (Mutil.tr '_' ' ' ini);
+         stagn "a" "href=\"#%s\"" ini_k begin
+           Wserver.wprint "%s" (Mutil.tr '_' ' ' ini_k);
          end)
     list;
   end;
   tag "ul" begin
     List.iter
       (fun (ini_k, l) ->
-         let ini = capitalize_if_not_utf8 ini_k in
          tag "li" begin
            stagn "a" "id=\"%s\"" ini_k begin
-             Wserver.wprint "%s" (Mutil.tr '_' ' ' ini);
+             Wserver.wprint "%s" (Mutil.tr '_' ' ' ini_k);
            end;
            tag "ul" begin
              List.iter
@@ -212,7 +188,7 @@ value print_alphabetic_all conf base is_surnames ini list len = do {
                   stagn "li" begin
                     let href =
                       "m=" ^ mode ^ ";v=" ^
-                      code_varenv (lower_if_not_utf8 s) ^ ";t=A"
+                      code_varenv s ^ ";t=A"
                     in
                     wprint_geneweb_link conf href
                       (alphab_string conf base is_surnames s);
@@ -237,7 +213,7 @@ value print_alphabetic_small conf base is_surnames ini list len = do {
         (fun (_, s, cnt) ->
            stagn "li" begin
              stag "a" "href=\"%sm=%s;v=%s;t=A\"" (commd conf) mode
-               (code_varenv (lower_if_not_utf8 s))
+               (code_varenv s)
              begin
                Wserver.wprint "%s" (alphab_string conf base is_surnames s);
              end;
@@ -289,7 +265,7 @@ value select_names conf base is_surnames ini need_whole_list =
   let (list, len) =
     let start_k = Mutil.tr '_' ' ' ini in
     match
-      try Some (spi_first iii (capitalize_if_not_utf8 start_k)) with
+      try Some (spi_first iii start_k) with
       [ Not_found -> None ]
     with
     [ Some istr ->
@@ -353,16 +329,15 @@ value select_names conf base is_surnames ini need_whole_list =
          if cnt >= lim then ([(k, s, cnt) :: list], len) else (list, len - 1))
       ([], len) list
   in
-  (list, if Mutil.utf_8_db.val then False else True, len)
+  (list, len)
 ;
 
-value compare2 s1 s2 =
-  if Mutil.utf_8_db.val then Gutil.alphabetic_utf_8 s1 s2 else compare s1 s2
+value compare2 = Gutil.alphabetic_utf_8
 ;
 
 value print_frequency conf base is_surnames =
   let () = load_strings_array base in
-  let (list, _, len) = select_names conf base is_surnames "" True in
+  let (list, len) = select_names conf base is_surnames "" True in
   let list =
     List.sort
       (fun (k1, _, cnt1) (k2, _, cnt2) ->
@@ -378,7 +353,7 @@ value print_frequency conf base is_surnames =
 value print_alphabetic conf base is_surnames =
   let ini =
     match p_getenv conf.env "k" with
-    [ Some k -> lowercase_if_not_utf8 k
+    [ Some k -> k
     | _ -> "" ]
   in
   let fast =
@@ -399,11 +374,8 @@ value print_alphabetic conf base is_surnames =
         if c = 'A' then (list, len)
         else loop list (len + 1) (Char.chr (Char.code c - 1))
     else
-      let (list, sorted, len) = select_names conf base is_surnames ini all in
-      let list =
-        if sorted then list
-        else List.sort (fun (k1, _, _) (k2, _, _) -> compare2 k1 k2) list
-      in
+      let (list, len) = select_names conf base is_surnames ini all in
+      let list = List.sort (fun (k1, _, _) (k2, _, _) -> compare2 k1 k2) list in
       (list, len)
   in
   if fast then
@@ -429,27 +401,25 @@ value print_alphabetic_short conf base is_surnames ini list len = do {
     tag "p" begin
       List.iter
         (fun (ini_k, _) ->
-           let ini = capitalize_if_not_utf8 ini_k in
-           stagn "a" "href=\"#%s\"" ini begin
-             Wserver.wprint "%s" (Mutil.tr '_' ' ' ini);
+           stagn "a" "href=\"#%s\"" ini_k begin
+             Wserver.wprint "%s" (Mutil.tr '_' ' ' ini_k);
            end)
       list;
     end
   else ();
   List.iter
     (fun (ini_k, l) ->
-       let ini = capitalize_if_not_utf8 ini_k in
        tag "p" begin
          list_iter_first
            (fun first (s, cnt) -> do {
               let href =
                 if not conf.cancel_links then
                   " href=\"" ^ commd conf ^ "m=" ^ mode ^ ";v=" ^
-                    code_varenv (lower_if_not_utf8 s) ^ ";t=A\""
+                    code_varenv s ^ ";t=A\""
                 else ""
               in
               let name =
-                if first && need_ref then " id=\"" ^ ini ^ "\"" else ""
+                if first && need_ref then " id=\"" ^ ini_k ^ "\"" else ""
               in
               if not first then Wserver.wprint ",\n" else ();
               if href <> "" || name <> "" then
@@ -470,17 +440,14 @@ value print_alphabetic_short conf base is_surnames ini list len = do {
 value print_short conf base is_surnames =
   let ini =
     match p_getenv conf.env "k" with
-    [ Some k -> lowercase_if_not_utf8 k
+    [ Some k -> k
     | _ -> "" ]
   in
   let _ = if String.length ini < 2 then load_strings_array base else () in
-  let (list, sorted, len) = select_names conf base is_surnames ini True in
+  let (list, len) = select_names conf base is_surnames ini True in
   if len > default_max_cnt then incorrect_request conf
   else
-    let list =
-      if sorted then list
-      else List.sort (fun (k1, _, _) (k2, _, _) -> compare2 k1 k2) list
-    in
+    let list = List.sort (fun (k1, _, _) (k2, _, _) -> compare2 k1 k2) list in
     let list = combine_by_ini ini list in
     print_alphabetic_short conf base is_surnames ini list len
 ;

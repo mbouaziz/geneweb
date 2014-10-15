@@ -340,8 +340,7 @@ value gen_output no_patches bname base =
     in
     try
       do {
-        output_string oc
-          (if utf_8_db.val then magic_gwb else magic_gwb_iso_8859_1);
+        output_string oc magic_gwb;
         output_binary_int oc base.data.persons.len;
         output_binary_int oc base.data.families.len;
         output_binary_int oc base.data.strings.len;

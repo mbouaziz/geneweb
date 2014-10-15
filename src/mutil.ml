@@ -3,7 +3,6 @@
 
 value int_size = 4;
 value verbose = ref True;
-value utf_8_db = Name.utf_8_db;
 
 value lindex s c =
   pos 0 where rec pos i =
@@ -211,15 +210,6 @@ value initial n =
       match n.[i] with
       [ 'A'..'Z' | 'À'..'Ý' -> i
       | _ -> loop (succ i) ]
-;
-
-value name_key s =
-  let i = initial s in
-  let s =
-    if i = 0 then s
-    else String.sub s i (String.length s - i) ^ " " ^ String.sub s 0 i
-  in
-  Name.lower s
 ;
 
 value input_particles fname =

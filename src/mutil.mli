@@ -3,7 +3,6 @@
 
 value int_size : int;
 value verbose : ref bool;
-value utf_8_db : ref bool;
 
 value lindex : string -> char -> option int;
 value rindex : string -> char -> option int;
@@ -24,7 +23,6 @@ value lock_file : string -> string;
 value output_value_no_sharing : out_channel -> _ -> unit;
 value output_array_no_sharing : out_channel -> (int -> _) -> int -> unit;
 
-value name_key : string -> string;
 value initial : string -> int;
 value input_particles : string -> list string;
 value surnames_pieces : string -> list string;

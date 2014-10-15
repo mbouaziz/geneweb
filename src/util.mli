@@ -138,8 +138,6 @@ value hexa_string : string -> string;
 value surname_begin : base -> string -> string;
 value surname_end : base -> string -> string;
 value get_particle : base -> string -> string;
-value old_surname_begin : string -> string;
-value old_surname_end : string -> string;
 
 value specify_homonymous : config -> base -> person -> bool -> unit;
 

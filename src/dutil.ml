@@ -59,9 +59,9 @@ value check_magic =
   fun ic ->
     do {
       really_input ic b 0 (String.length b);
-      Mutil.utf_8_db.val := True;
       if b <> magic_gwb then
-        if b = magic_gwb_iso_8859_1 then Mutil.utf_8_db.val := False
+        if b = magic_gwb_iso_8859_1 then
+          failwith "this is an iso-8859-1 GeneWeb base, please convert it to an utf-8 base"
         else if String.sub magic_gwb 0 4 = String.sub b 0 4 then
           failwith "this is a GeneWeb base, but not compatible"
         else
@@ -113,8 +113,7 @@ value compare_names_1 s1 s2 =
 ;
 
 value compare_names base_data s1 s2 =
-  if utf_8_db.val then compare_after_particle base_data.particles s1 s2
-  else compare_names_1 s1 s2
+  compare_after_particle base_data.particles s1 s2
 ;
 
 value compare_istr_fun base_data is1 is2 =

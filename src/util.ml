@@ -66,7 +66,7 @@ value match_begin s t =
     else False
 ;
 
-value amp_capitalize capitale s =
+value rec amp_capitalize s =
   if String.length s <= 1 then s
   else if match_begin s "&iexcl;" then
     "&iexcl;" ^ capitale (String.sub s 7 (String.length s - 7))
@@ -81,31 +81,17 @@ value amp_capitalize capitale s =
                (Char.code s.[1] - Char.code 'a' + Char.code 'A')) ^
           String.sub s 2 (String.length s - 2)
     | _ -> s ]
-;
-
-value rec capitale_iso_8859_1 s =
-  if String.length s = 0 then ""
-  else
-    match s.[0] with
-    [ 'a'..'z' | 'à'..'ö' | 'ø'..'ý' ->
-        String.make 1
-          (Char.chr (Char.code s.[0] - Char.code 'a' + Char.code 'A')) ^
-          String.sub s 1 (String.length s - 1)
-    | '&' -> amp_capitalize capitale_iso_8859_1 s
-    | _ -> s ]
-;
-
-value rec capitale_utf_8 s =
+and capitale s =
   if String.length s = 0 then ""
   else
     let c = s.[0] in
-    if c = '&' then amp_capitalize capitale_utf_8 s
+    if c = '&' then amp_capitalize s
     else if c = '<' then
       loop 1 where rec loop i =
         if i = String.length s then s
         else if s.[i] = '>' then
           let s1 = String.sub s (i + 1) (String.length s - i - 1) in
-          String.sub s 0 (i + 1) ^ capitale_utf_8 s1
+          String.sub s 0 (i + 1) ^ capitale s1
         else loop (i + 1)
     else if Char.code c < 0b10000000 then String.capitalize s
     else if String.length s = 1 then s
@@ -129,14 +115,7 @@ value rec capitale_utf_8 s =
 ;
 
 value index_of_next_char s i =
-  if Mutil.utf_8_db.val then
-    min (String.length s) (i + max 1 (Name.nbc s.[i]))
-  else i + 1
-;
-
-value capitale s =
-  if Mutil.utf_8_db.val then capitale_utf_8 s
-  else capitale_iso_8859_1 s
+  min (String.length s) (i + max 1 (Name.nbc s.[i]))
 ;
 
 type format2 'a 'b = format4 'a unit string 'b;
@@ -1097,22 +1076,6 @@ value person_title conf base p =
     [ Some t -> one_title_text conf base p t
     | None -> "" ]
   else ""
-;
-
-value old_surname_begin n =
-  let i = initial n in
-  if i = 0 then ""
-  else
-    let i =
-      strip_spaces i where rec strip_spaces i =
-        if i >= 1 && n.[i - 1] = ' ' then strip_spaces (pred i) else i
-    in
-    " (" ^ String.sub n 0 i ^ ")"
-;
-
-value old_surname_end n =
-  let i = initial n in
-  if i = 0 then n else String.sub n i (String.length n - i)
 ;
 
 value start_with s i p =
@@ -2774,7 +2737,7 @@ value gen_only_printable or_nl s =
   do {
     for i = 0 to String.length s - 1 do {
       s'.[i] :=
-        if Mutil.utf_8_db.val && Char.code s.[i] > 127 then s.[i]
+        if Char.code s.[i] > 127 then s.[i]
         else
           match s.[i] with
           [ ' '..'~' | '\160'..'\255' -> s.[i]

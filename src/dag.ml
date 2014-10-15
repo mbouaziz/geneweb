@@ -344,8 +344,7 @@ value displayed_next_char s i =
           in
           loop1 (i + 1)
       | c ->
-          if utf_8_db.val then Some (i, i + max 1 (Name.nbc c))
-          else Some (i, i + 1) ]
+          Some (i, i + max 1 (Name.nbc c)) ]
 ;
 
 value buff_store_int s blen i j =

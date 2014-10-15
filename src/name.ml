@@ -1,8 +1,6 @@
 (* $Id: name.ml,v 5.12 2007-03-20 10:34:14 ddr Exp $ *)
 (* Copyright (c) 1998-2007 INRIA *)
 
-value utf_8_db = ref True;
-
 (* La liste des caractères interdits *)
 value forbidden_char = [':'; '@'; '#'; '='; '$'] ;
 
@@ -352,22 +350,16 @@ value unaccent_utf_8 lower s i =
 
 value next_chars_if_equiv s i t j =
   if i >= String.length s || j >= String.length t then None
-  else if utf_8_db.val then
+  else
     let (s1, i1) = unaccent_utf_8 True s i in
     let (t1, j1) = unaccent_utf_8 True t j in
     if s1 = t1 then Some (i1, j1) else None
-  else if s.[i] = t.[j] then Some (i + 1, j + 1)
-  else if
-    unaccent_iso_8859_1 (Char.lowercase s.[i]) =
-    unaccent_iso_8859_1 (Char.lowercase t.[j])
-  then Some (i + 1, j + 1)
-  else None
 ;
 
 value lower s =
   copy False 0 0 where rec copy special i len =
     if i = String.length s then Buff.get len
-    else if not utf_8_db.val || Char.code s.[i] < 0x80 then
+    else if Char.code s.[i] < 0x80 then
       match s.[i] with
       [ 'a'..'z' | 'A'..'Z' | 'à'..'ÿ' | 'À'..'Ý' | '0'..'9' | '.' as c
         ->
@@ -486,8 +478,7 @@ value crush s =
                 else len
               in
               copy (i + 1) len first_vowel
-          | 's' | 'z' when
-            utf_8_db.val && (i = String.length s - 1 || s.[i + 1] = ' ') ->
+          | 's' | 'z' when i = String.length s - 1 || s.[i + 1] = ' ' ->
               let len =
                 loop (i - 1) (len - 1) where rec loop i len =
                   if i > 0 && len > 0 && s.[i] = Buff.buff.val.[len] &&
@@ -495,8 +486,6 @@ value crush s =
                     loop (i - 1) (len - 1)
                   else len + 1
               in
-              copy (i + 1) len False
-          | 's' when i = String.length s - 1 || s.[i + 1] = ' ' ->
               copy (i + 1) len False
           | c ->
               if i > 0 && s.[i-1] = c then copy (i + 1) len False

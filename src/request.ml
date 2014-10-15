@@ -833,16 +833,6 @@ value treat_request_on_possibly_locked_base conf bfile log =
   match try Left (Gwdb.open_base bfile) with e -> Right e with
   [ Left base ->
       do {
-        if Mutil.utf_8_db.val then ()
-        else do {
-          Hashtbl.clear conf.lexicon;
-          let fname = Filename.concat "lang" "lexicon.txt" in
-          Mutil.input_lexicon conf.lang conf.lexicon
-            (fun () -> Secure.open_in (Util.search_in_lang_path fname));
-          conf.charset :=
-            try Hashtbl.find conf.lexicon " !charset" with
-            [ Not_found -> "iso-8859-1" ];
-        };
         try treat_request conf base log with exc ->
           do { close_base base; raise exc };
         close_base base;
