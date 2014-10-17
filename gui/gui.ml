@@ -489,16 +489,8 @@ value browse conf url = do {
    donc toujours dans le répertoire des bases dans launch_server.
 *)
 
-value gwc1 conf bname fname =
-  (* Hack Windows, pas de Filename.concat mais juste bname *)
-  let prog = Filename.concat bin_dir "gwc1" in
-  let args = ["-v"; "-nc"; "-o"; bname] in
-  let args = if fname <> "" then [fname :: args] else args in
-  exec_wait conf prog args
-;
-
-value gwc2 conf bname fname =
-  let prog = Filename.concat bin_dir "gwc2" in
+value gwc conf bname fname =
+  let prog = Filename.concat bin_dir "gwc" in
   let args = ["-v"; "-nc"; "-o"; bname] in
   let args = if fname <> "" then [fname :: args] else args in
   exec_wait conf prog args
@@ -506,13 +498,6 @@ value gwc2 conf bname fname =
 
 value ged2gwb conf bname fname =
   let prog = Filename.concat bin_dir "ged2gwb" in
-  let args = ["-nc"; "-o"; bname] in
-  let args = if fname <> "" then [fname :: args] else args in
-  exec_wait conf prog args
-;
-
-value ged2gwb2 conf bname fname =
-  let prog = Filename.concat bin_dir "ged2gwb2" in
   let args = ["-nc"; "-o"; bname] in
   let args = if fname <> "" then [fname :: args] else args in
   exec_wait conf prog args

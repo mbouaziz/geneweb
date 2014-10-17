@@ -37,7 +37,6 @@ install:
 	cp src/gwd $(PREFIX)/bin/gwd$(EXE)
 	cp src/gwu $(PREFIX)/bin/gwu$(EXE)
 	cp ged2gwb/ged2gwb $(PREFIX)/bin/ged2gwb$(EXE)
-	cp ged2gwb/ged2gwb2 $(PREFIX)/bin/ged2gwb2$(EXE)
 	cp gwb2ged/gwb2ged $(PREFIX)/bin/gwb2ged$(EXE)
 	mkdir -p $(LANGDIR)/lang
 	cp hd/lang/*.txt $(LANGDIR)/lang/.
@@ -122,7 +121,6 @@ classical_distrib:
 	cp src/gwu $(DESTDIR)/gwu$(EXE)
 	cp src/update_nldb $(DESTDIR)/update_nldb$(EXE)
 	cp ged2gwb/ged2gwb $(DESTDIR)/ged2gwb$(EXE)
-	cp ged2gwb/ged2gwb2 $(DESTDIR)/ged2gwb2$(EXE)
 	cp gwb2ged/gwb2ged $(DESTDIR)/gwb2ged$(EXE)
 	mkdir $(DESTDIR)/gwtp_tmp
 	mkdir $(DESTDIR)/gwtp_tmp/lang

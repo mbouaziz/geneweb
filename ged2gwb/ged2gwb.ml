@@ -1,60 +1,32 @@
 (* camlp5r pa_extend.cmo ../src/pa_lock.cmo *)
-(* $Id: ged2gwb.ml,v 5.53 2007-09-12 09:58:44 ddr Exp $ *)
-(* Copyright (c) 1998-2007 INRIA *)
+(* $Id: ged2gwb.ml,v 5.7 2008-01-14 03:51:54 ddr Exp $ *)
+(* Copyright (c) 1998-2008 INRIA *)
 
-open Dbdisk;
 open Def;
 open Mutil;
 open Printf;
 
-type person = dsk_person;
-type ascend = dsk_ascend;
-type union = dsk_union;
-type family = dsk_family;
-type couple = dsk_couple;
-type descend = dsk_descend;
+type person = gen_person iper Adef.istr;
+type ascend = gen_ascend ifam;
+type union = gen_union ifam;
+type family = gen_family iper Adef.istr;
+type couple = gen_couple iper;
+type descend = gen_descend iper;
 
-value get_access p = p.Def.access;
-value get_aliases p = p.Def.aliases;
-value get_baptism p = p.Def.baptism;
-value get_baptism_place p = p.Def.baptism_place;
-value get_baptism_src p = p.Def.baptism_src;
-value get_birth p = p.Def.birth;
-value get_birth_place p = p.Def.birth_place;
-value get_birth_src p = p.Def.birth_src;
-value get_burial p = p.Def.burial;
-value get_burial_place p = p.Def.burial_place;
-value get_burial_src p = p.Def.burial_src;
-value get_death p = p.Def.death;
-value get_death_place p = p.Def.death_place;
-value get_death_src p = p.Def.death_src;
 value get_first_name p = p.Def.first_name;
-value get_first_names_aliases p = p.Def.first_names_aliases;
-value get_image p = p.Def.image;
 value get_key_index p = p.Def.key_index;
 value get_notes p = p.Def.notes;
 value get_occ p = p.Def.occ;
-value get_occupation p = p.Def.occupation;
-value get_psources p = p.Def.psources;
-value get_public_name p = p.Def.public_name;
-value get_qualifiers p = p.Def.qualifiers;
 value get_related p = p.Def.related;
 value get_rparents p = p.Def.rparents;
 value get_sex p = p.Def.sex;
 value get_surname p = p.Def.surname;
-value get_surnames_aliases p = p.Def.surnames_aliases;
-value get_titles p = p.Def.titles;
-
-value person_with_key p fn sn oc =
-  {(p) with first_name = fn; surname = sn; occ = oc}
-;
 value person_with_related p r = {(p) with related = r};
 value person_with_rparents p r = {(p) with rparents = r};
 value person_with_sex p s = {(p) with sex = s};
 value person_of_gen_person p = p;
 value gen_person_of_person p = p;
 
-value get_consang a = a.Def.consang;
 value get_parents a = a.Def.parents;
 
 value ascend_with_parents a p = {parents = p; consang = a.consang};
@@ -64,56 +36,17 @@ value get_family u = u.Def.family;
 
 value union_of_gen_union u = u;
 
-value get_comment f = f.Def.comment;
-value get_divorce f = f.Def.divorce;
-value get_fam_index f = f.Def.fam_index;
-value get_fsources f = f.Def.fsources;
-value get_marriage f = f.Def.marriage;
-value get_marriage_place f = f.Def.marriage_place;
-value get_marriage_src f = f.Def.marriage_src;
-value get_origin_file f = f.Def.origin_file;
-value get_relation f = f.Def.relation;
 value get_witnesses f = f.Def.witnesses;
 
 value family_of_gen_family f = f;
 value gen_family_of_family f = f;
 
 value get_father c = Adef.father c;
-value get_mother c = Adef.mother c;
-value get_parent_array c = Adef.parent_array c;
-
-value gen_couple_of_couple c = c;
 value couple_of_gen_couple c = c;
 
-value get_children d = d.Def.children;
-
 value descend_of_gen_descend d = d;
-value gen_descend_of_descend d = d;
-
-value poi base i = base.data.persons.get (Adef.int_of_iper i);
-value aoi base i = base.data.ascends.get (Adef.int_of_iper i);
-value uoi base i = base.data.unions.get (Adef.int_of_iper i);
-
-value foi base i = base.data.families.get (Adef.int_of_ifam i);
-value coi base i = base.data.couples.get (Adef.int_of_ifam i);
-value doi base i = base.data.descends.get (Adef.int_of_ifam i);
-
-value sou base i = base.data.strings.get (Adef.int_of_istr i);
-
-value p_first_name base p = nominative (sou base p.first_name);
-value p_surname base p = nominative (sou base p.surname);
-value designation base p =
-  let prenom = p_first_name base p in
-  let nom = p_surname base p in
-  prenom ^ "." ^ string_of_int p.occ ^ " " ^ nom
-;
 
 value couple _ x y = Adef.couple x y;
-
-value strictly_after = CheckItem.strictly_after;
-value strictly_before_dmy = CheckItem.strictly_before_dmy;
-value date_of_death = CheckItem.date_of_death;
-value year_of d = d.year;
 
 value log_oc = ref stdout;
 
@@ -167,9 +100,9 @@ value first_names_brackets = ref None;
 value untreated_in_notes = ref False;
 value force = ref False;
 value default_source = ref "";
+value default_name = ref "?";
 value relation_status = ref Married;
 value no_picture = ref False;
-value do_check = ref True;
 
 (* Reading input *)
 
@@ -486,41 +419,6 @@ value strip c str =
 value strip_spaces = strip ' ';
 value strip_newlines = strip '\n';
 
-value less_greater_escaped s =
-  let rec need_code i =
-    if i < String.length s then
-      match s.[i] with
-      [ '<' | '>' -> True
-      | x -> need_code (succ i) ]
-    else False
-  in
-  let rec compute_len i i1 =
-    if i < String.length s then
-      let i1 =
-        match s.[i] with
-        [ '<' | '>' -> i1 + 4
-        | _ -> succ i1 ]
-      in
-      compute_len (succ i) i1
-    else i1
-  in
-  let rec copy_code_in s1 i i1 =
-    if i < String.length s then
-      let i1 =
-        match s.[i] with
-        [ '<' -> do { String.blit "&lt;" 0 s1 i1 4; i1 + 4 }
-        | '>' -> do { String.blit "&gt;" 0 s1 i1 4; i1 + 4 }
-        | c -> do { s1.[i1] := c; succ i1 } ]
-      in
-      copy_code_in s1 (succ i) i1
-    else s1
-  in
-  if need_code 0 then
-    let len = compute_len 0 0 in
-    copy_code_in (String.create len) 0 0
-  else s
-;
-
 value parse_name =
   parser
     [: _ = skip_spaces;
@@ -645,7 +543,6 @@ value roman_int =
 ;
 
 value date_str = ref "";
-
 value make_date n1 n2 n3 =
   let n3 =
     if no_negative_dates.val then
@@ -890,7 +787,7 @@ type gen =
     g_src : Hashtbl.t string int;
     g_hper : Hashtbl.t string Adef.iper;
     g_hfam : Hashtbl.t string Adef.ifam;
-    g_hstr : Hashtbl.t string dsk_istr;
+    g_hstr : Hashtbl.t string Adef.istr;
     g_hnam : Hashtbl.t string (ref int);
     g_adop : Hashtbl.t string (Adef.iper * string);
     g_godp : mutable list (Adef.iper * Adef.iper);
@@ -1566,26 +1463,6 @@ value forward_witn gen ip rval =
   do { gen.g_witn := [(ifam, ip) :: gen.g_witn]; ifam }
 ;
 
-value glop = ref [];
-
-value indi_lab =
-  fun
-  [ "ADOP" | "ASSO" | "BAPM" | "BIRT" | "BURI" | "CHR" | "CREM" | "DEAT" |
-    "FAMC" | "FAMS" | "NAME" | "NOTE" | "OBJE" | "OCCU" | "SEX" | "SOUR" |
-    "TITL" ->
-      True
-  | c ->
-      do {
-        if List.mem c glop.val then ()
-        else do {
-          glop.val := [c :: glop.val];
-          eprintf "untreated tag %s -> in notes\n" c;
-          flush stderr
-        };
-        False
-      } ]
-;
-
 value html_text_of_tags text rl =
   let rec tot len lev r =
     let len = Buff.mstore len (string_of_int lev) in
@@ -1684,7 +1561,7 @@ value add_indi gen r =
                 in
                 let fn = String.sub f (i + 1) (j - i - 1) in
                 let fa =
-                  String.sub f 0 j ^
+                  String.sub f 0 j ^ fn ^
                     String.sub f (j + 1) (String.length f - j - 1)
                 in
                 (fn, fa)
@@ -1771,6 +1648,11 @@ value add_indi gen r =
   (* S'il y a des caractères interdits, on les supprime *)
   let (first_name, surname) =
     (Name.strip_c first_name ':', Name.strip_c surname ':')
+  in
+  (* Si le prénom ou le nom est vide *)
+  let (first_name, surname) =
+    (if first_name = "" then default_name.val else first_name,
+     if surname = "" then default_name.val else surname)
   in
   let qualifier =
     match name_sons with
@@ -2349,26 +2231,6 @@ value make_gen3 gen r =
       } ]
 ;
 
-value rec sortable_by_date proj =
-  fun
-  [ [] -> True
-  | [e :: el] ->
-      match proj e with
-      [ Some d -> sortable_by_date proj el
-      | None -> False ] ]
-;
-
-value sort_by_date proj list =
-  if sortable_by_date proj list then
-    List.sort
-      (fun e1 e2 ->
-         match (proj e1, proj e2) with
-         [ (Some d1, Some d2) -> if not (strictly_after d1 d2) then -1 else 1
-         | _ -> 1 ])
-      list
-  else list
-;
-
 value find_lev0 =
   parser bp
     [: _ = line_start '0'; _ = skip_space; r1 = get_ident 0; r2 = get_ident 0;
@@ -2624,388 +2486,105 @@ value make_subarrays (g_per, g_fam, g_str, g_bnot) =
   (persons, families, strings, g_bnot)
 ;
 
-value record_access_of tab =
-  {load_array () = (); get i = tab.(i); set i v = tab.(i) := v;
-   output_array oc = output_value_no_sharing oc (tab : array _);
-   len = Array.length tab; clear_array () = ()}
+(* Converting to Gwcomp.gw_syntax *)
+
+value key_of_person sa p =
+  {Gwcomp.pk_first_name = sa.(Adef.int_of_istr p.first_name);
+   pk_surname = sa.(Adef.int_of_istr p.surname); pk_occ = p.occ}
 ;
 
-value make_base (persons, families, strings, bnotes) bdir =
-  let (persons, ascends, unions) = persons in
-  let (families, couples, descends) = families in
-  let bnotes =
-    {nread s _ = if s = "" then bnotes else ""; norigin_file = "";
-     efiles _ = []}
-  in
-  let base_data =
-    {persons = record_access_of persons; ascends = record_access_of ascends;
-     unions = record_access_of unions; families = record_access_of families;
-     visible = { v_write = fun []; v_get = fun [] };
-     couples = record_access_of couples; descends = record_access_of descends;
-     strings = record_access_of strings; particles = []; bnotes = bnotes;
-     bdir = bdir}
-  in
-  let base_func =
-    {person_of_key = fun []; persons_of_name = fun [];
-     strings_of_fsname = fun [];
-     persons_of_surname = {find = fun []; cursor = fun []; next = fun []};
-     persons_of_first_name = {find = fun []; cursor = fun []; next = fun []};
-     patch_person = fun []; patch_ascend = fun [];
-     patch_union = fun []; patch_family = fun []; patch_couple = fun [];
-     patch_descend = fun []; patch_name = fun []; insert_string = fun [];
-     commit_patches = fun []; commit_notes = fun []; patched_ascends = fun [];
-     is_patched_person _ = False; cleanup () = ()}
-  in
-  {data = base_data; func = base_func}
-;
-
-value array_memq x a =
-  loop 0 where rec loop i =
-    if i = Array.length a then False
-    else if x = a.(i) then True
-    else loop (i + 1)
-;
-
-value check_parents_children base ascends unions couples descends =
-  let to_delete = ref [] in
-  let fam_to_delete = ref [] in
-  do {
-    for i = 0 to base.data.persons.len - 1 do {
-      let a = ascends.(i) in
-      match get_parents a with
-      [ Some ifam ->
-          let fam = foi base ifam in
-          if get_fam_index fam = Adef.ifam_of_int (-1) then
-            ascends.(i) := ascend_with_parents a None
-          else
-            let cpl = coi base ifam in
-            let des = doi base ifam in
-            if array_memq (Adef.iper_of_int i) (get_children des) then ()
-            else do {
-              let p = poi base (Adef.iper_of_int i) in
-              fprintf log_oc.val
-                "%s is not the child of his/her parents\n"
-                (designation base p);
-              fprintf log_oc.val "- %s\n"
-                (designation base (poi base (get_father cpl)));
-              fprintf log_oc.val "- %s\n"
-                (designation base (poi base (get_mother cpl)));
-              fprintf log_oc.val "=> no more parents for him/her\n";
-              fprintf log_oc.val "\n";
-              flush log_oc.val;
-              ascends.(i) := ascend_with_parents a None
-            }
-      | None -> () ];
-      fam_to_delete.val := [];
-      let u = unions.(i) in
-      for j = 0 to Array.length (get_family u) - 1 do {
-        let cpl = couples.(Adef.int_of_ifam (get_family u).(j)) in
-        if Adef.iper_of_int i <> get_father cpl &&
-           Adef.iper_of_int i <> get_mother cpl
-        then do {
-          fprintf log_oc.val
-            "%s is spouse in this family but neither husband nor wife:\n"
-            (designation base (poi base (Adef.iper_of_int i)));
-          fprintf log_oc.val "- %s\n"
-            (designation base (poi base (get_father cpl)));
-          fprintf log_oc.val "- %s\n"
-            (designation base (poi base (get_mother cpl)));
-          let fath = poi base (get_father cpl) in
-          let moth = poi base (get_mother cpl) in
-          let ffn = sou base (get_first_name fath) in
-          let fsn = sou base (get_surname fath) in
-          let mfn = sou base (get_first_name moth) in
-          let msn = sou base (get_surname moth) in
-          if ffn = "?" && fsn = "?" && mfn <> "?" && msn <> "?" then do {
-            fprintf log_oc.val
-              "However, the husband is unknown, I set him as husband\n";
-            unions.(Adef.int_of_iper (get_father cpl)) :=
-              union_of_gen_union {family = [| |]};
-            let cpl =
-              couple_of_gen_couple
-                (couple False (Adef.iper_of_int i) (get_mother cpl))
-            in
-            couples.(Adef.int_of_ifam (get_family u).(j)) := cpl;
-          }
-          else if mfn = "?" && msn = "?" && ffn <> "?" && fsn <> "?" then do {
-            fprintf log_oc.val
-              "However, the wife is unknown, I set her as wife\n";
-            unions.(Adef.int_of_iper (get_mother cpl)) :=
-              union_of_gen_union {family = [| |]};
-            let cpl =
-              couple_of_gen_couple
-                (couple False (get_father cpl) (Adef.iper_of_int i))
-            in
-            couples.(Adef.int_of_ifam (get_family u).(j)) := cpl;
-          }
-          else do {
-            fprintf log_oc.val "=> deleted this family for him/her\n";
-            fam_to_delete.val := [j :: fam_to_delete.val];
-          };
-          fprintf log_oc.val "\n";
-          flush log_oc.val
-        }
-        else ()
-      };
-      if fam_to_delete.val <> [] then
-        let (list, _) =
-          List.fold_left
-            (fun (list, i) x ->
-               if List.mem i fam_to_delete.val then (list, i + 1)
-               else ([x :: list], i + 1))
-            ([], 0) (Array.to_list (get_family u))
-        in
-        unions.(i) :=
-          union_of_gen_union {family = Array.of_list (List.rev list)}
-      else ()
-    };
-    for i = 0 to base.data.families.len - 1 do {
-      to_delete.val := [];
-      let fam = foi base (Adef.ifam_of_int i) in
-      let cpl = coi base (Adef.ifam_of_int i) in
-      let des = descends.(i) in
-      for j = 0 to Array.length (get_children des) - 1 do {
-        let a = ascends.(Adef.int_of_iper (get_children des).(j)) in
-        let p = poi base (get_children des).(j) in
-        match get_parents a with
-        [ Some ifam ->
-            if Adef.int_of_ifam ifam <> i then do {
-              fprintf log_oc.val "Other parents for %s\n"
-                (designation base p);
-              fprintf log_oc.val "- %s\n"
-                (designation base (poi base (get_father cpl)));
-              fprintf log_oc.val "- %s\n"
-                (designation base (poi base (get_mother cpl)));
-              fprintf log_oc.val "=> deleted in this family\n";
-              fprintf log_oc.val "\n";
-              flush log_oc.val;
-              to_delete.val := [get_key_index p :: to_delete.val]
-            }
-            else ()
-        | None ->
-            do {
-              fprintf log_oc.val
-                "%s has no parents but is the child of\n"
-                (designation base p);
-              fprintf log_oc.val "- %s\n"
-                (designation base (poi base (get_father cpl)));
-              fprintf log_oc.val "- %s\n"
-                (designation base (poi base (get_mother cpl)));
-              fprintf log_oc.val "=> added parents\n";
-              fprintf log_oc.val "\n";
-              flush log_oc.val;
-              let a = ascend_with_parents a (Some (get_fam_index fam)) in
-              ascends.(Adef.int_of_iper (get_children des).(j)) := a
-            } ]
-      };
-      if to_delete.val <> [] then
-        let l =
-          List.fold_right
-            (fun ip l -> if List.mem ip to_delete.val then l else [ip :: l])
-            (Array.to_list (get_children des)) []
-        in
-        descends.(i) := descend_of_gen_descend {children = Array.of_list l}
-      else ()
-    }
-  }
-;
-
-value string_of_sex =
-  fun
-  [ Male -> "M"
-  | Female -> "F"
-  | Neuter -> "N" ]
-;
-
-value check_parents_sex base persons families =
-  for i = 0 to base.data.couples.len - 1 do {
-    let cpl = coi base (Adef.ifam_of_int i) in
-    let fam = families.(i) in
-    let ifath = get_father cpl in
-    let imoth = get_mother cpl in
-    let fath = poi base ifath in
-    let moth = poi base imoth in
-    if get_relation fam = NoSexesCheckNotMarried
-    || get_relation fam = NoSexesCheckMarried then ()
-    else if get_sex fath = Female || get_sex moth = Male then do {
-      if get_sex fath = Female then
-        fprintf log_oc.val "Warning - husband with female sex: %s\n"
-          (designation base fath)
-      else ();
-      if get_sex moth = Male then
-        fprintf log_oc.val "Warning - wife with male sex: %s\n"
-          (designation base moth)
-      else ();
-      flush log_oc.val;
-      let fam =
-        family_of_gen_family
-          {(gen_family_of_family fam) with relation = NoSexesCheckNotMarried}
-      in
-      families.(i) := fam;
-    }
+value somebody_of_person def pa sa ip =
+  let p = pa.(Adef.int_of_iper ip) in
+  let somebody =
+    if def.(Adef.int_of_iper ip) then
+      let pk = key_of_person sa p in
+      Gwcomp.Undefined pk
     else do {
-      persons.(Adef.int_of_iper ifath) := person_with_sex fath Male;
-      persons.(Adef.int_of_iper imoth) := person_with_sex moth Female;
+      let p = {(p) with rparents = []; related = []; notes = string_empty} in
+      let p =
+        Futil.map_person_ps (fun p -> failwith "somebody_of_person")
+          (fun i -> sa.(Adef.int_of_istr i)) p
+      in
+      def.(Adef.int_of_iper ip) := True;
+      Gwcomp.Defined p
     }
-  }
-;
-
-value neg_year_dmy =
-  fun
-  [ {day = d; month = m; year = y; prec = OrYear y2} ->
-      {day = d; month = m; year = - abs y; prec = OrYear (- abs y2);
-       delta = 0}
-  | {day = d; month = m; year = y; prec = YearInt y2} ->
-      {day = d; month = m; year = - abs y; prec = YearInt (- abs y2);
-       delta = 0}
-  | {day = d; month = m; year = y; prec = p} ->
-      {day = d; month = m; year = - abs y; prec = p; delta = 0} ]
-;
-
-value neg_year =
-  fun
-  [ Dgreg d cal -> Dgreg (neg_year_dmy d) cal
-  | x -> x ]
-;
-
-value neg_year_cdate cd =
-  Adef.cdate_of_date (neg_year (Adef.date_of_cdate cd))
-;
-
-value rec negative_date_ancestors base persons families i = do {
-  let p = persons.(i) in
-  let p =
-    person_of_gen_person
-      {(gen_person_of_person p) with
-       birth =
-         match Adef.od_of_codate (get_birth p) with
-         [ Some d1 -> Adef.codate_of_od (Some (neg_year d1))
-         | _ -> get_birth p ];
-       death =
-         match get_death p with
-         [ Death dr cd2 -> Death dr (neg_year_cdate cd2)
-         | _ -> get_death p ]}
   in
-  persons.(i) := p;
-  let u = uoi base (get_key_index p) in
-  for i = 0 to Array.length (get_family u) - 1 do {
-    let j = Adef.int_of_ifam (get_family u).(i) in
-    let fam = families.(j) in
-    match Adef.od_of_codate (get_marriage fam) with
-    [ Some d ->
-        let fam =
-          family_of_gen_family
-            {(gen_family_of_family fam) with
-             marriage = Adef.codate_of_od (Some (neg_year d))}
-        in
-        families.(j) := fam
-    | None -> () ]
-  };
-  let a = aoi base (get_key_index p) in
-  match get_parents a with
-  [ Some ifam ->
-      let cpl = coi base ifam in
-      do {
-        negative_date_ancestors base persons families
-          (Adef.int_of_iper (get_father cpl));
-        negative_date_ancestors base persons families
-          (Adef.int_of_iper (get_mother cpl))
-      }
-  | _ -> () ]
-};
-
-value negative_dates base persons families =
-  for i = 0 to base.data.persons.len - 1 do {
-    let p = persons.(i) in
-    match (Adef.od_of_codate (get_birth p), date_of_death (get_death p)) with
-    [ (Some (Dgreg d1 _), Some (Dgreg d2 _)) ->
-        if year_of d1 > 0 && year_of d2 > 0 && strictly_before_dmy d2 d1 then
-          negative_date_ancestors base persons families i
-        else ()
-    | _ -> () ]
-  }
+  (somebody, p.sex)
 ;
 
-value finish_base base (persons, families, _, _) = do {
-  let (persons, ascends, unions) = persons in
-  let (families, couples, descends) = families in
-  for i = 0 to Array.length descends - 1 do {
-    let des = descends.(i) in
-    let children =
-      sort_by_date
-        (fun ip ->
-           Adef.od_of_codate (get_birth persons.(Adef.int_of_iper ip)))
-        (Array.to_list (get_children des))
-    in
-    descends.(i) :=
-      descend_of_gen_descend {children = Array.of_list children}
-  };
-  for i = 0 to Array.length unions - 1 do {
-    let u = unions.(i) in
-    let family =
-      sort_by_date
-        (fun ifam ->
-           Adef.od_of_codate (get_marriage families.(Adef.int_of_ifam ifam)))
-        (Array.to_list (get_family u))
-    in
-    unions.(i) := union_of_gen_union {family = Array.of_list family}
-  };
-  for i = 0 to Array.length persons - 1 do {
-    let p = persons.(i) in
-    let a = ascends.(i) in
-    let u = unions.(i) in
-    if get_parents a <> None && Array.length (get_family u) != 0 ||
-       get_notes p <> string_empty
-    then
-      let (fn, occ) =
-        if sou base (get_first_name p) = "?" then (string_x, i)
-        else (get_first_name p, get_occ p)
-      in
-      let (sn, occ) =
-        if sou base (get_surname p) = "?" then (string_x, i)
-        else (get_surname p, occ)
-      in
-      persons.(i) := person_with_key p fn sn occ
-    else ()
-  };
-  check_parents_sex base persons families;
-  check_parents_children base ascends unions couples descends;
-  if try_negative_dates.val then negative_dates base persons families
-  else ();
-  let base = Gwdb.base_of_base1 base in
-  if do_check.val then
-    Check.check_base base
-       (fun x ->
-          do {
-            Check.print_base_error log_oc.val base x;
-            fprintf log_oc.val "\n"
-          })
-       (fun
-        [ UndefinedSex _ -> ()
-        | x ->
-            do {
-              Check.print_base_warning log_oc.val base x;
-              fprintf log_oc.val "\n"
-            } ])
-       (fun _ -> True) (fun _ -> ()) False
-  else ();
-  flush log_oc.val
-};
+value string_person_of_person pa sa ip =
+  Futil.map_person_ps (fun p -> p) (fun i -> sa.(Adef.int_of_istr i))
+    pa.(Adef.int_of_iper ip)
+;
 
-value output_command_line bname =
-  let bdir =
-    if Filename.check_suffix bname ".gwb" then bname else bname ^ ".gwb"
-  in
-  let oc = open_out (Filename.concat bdir "command.txt") in
-  do {
-    fprintf oc "%s" Sys.argv.(0);
-    for i = 1 to Array.length Sys.argv - 1 do {
-      fprintf oc " %s" Sys.argv.(i)
+value make_gwsyntax ((pa, aa, ua), (fa, ca, da), sa, g_bnot) = do {
+  let rev_list = ref [] in
+  let def = Array.create (Array.length pa) False in
+  for ifam = 0 to Array.length fa - 1 do {
+    let des = da.(ifam) in
+    for i = 0 to Array.length des.children - 1 do {
+      def.(Adef.int_of_iper des.children.(i)) := True
     };
-    fprintf oc "\n";
-    close_out oc
-  }
-;
+  };
+  for ifam = 0 to Array.length fa - 1 do {
+    let cpl = ca.(ifam) in
+    let (fath, s1) = somebody_of_person def pa sa (Adef.father cpl) in
+    let (moth, s2) = somebody_of_person def pa sa (Adef.mother cpl) in
+    let cpl = Adef.couple fath moth in
+    let witn =
+      List.map (somebody_of_person def pa sa)
+        (Array.to_list fa.(ifam).witnesses)
+    in
+    let fam =
+      let fam = {(fa.(ifam)) with witnesses = [| |]} in
+      Futil.map_family_ps (fun p -> failwith "make_gwsyntax 1")
+        (fun i -> sa.(Adef.int_of_istr i)) fam
+    in
+    let des =
+      Futil.map_descend_p (string_person_of_person pa sa) da.(ifam)
+    in
+    rev_list.val := [Gwcomp.Family cpl s1 s2 witn fam des :: rev_list.val]
+  };
+  for i = 0 to Array.length pa - 1 do {
+    match pa.(i).rparents with
+    [ [] -> ()
+    | rl ->
+        let (x, sex) = somebody_of_person def pa sa (Adef.iper_of_int i) in
+        let rl =
+          List.map
+            (fun r ->
+               Futil.map_relation_ps
+                 (fun ip -> fst (somebody_of_person def pa sa ip))
+                 (fun i -> sa.(Adef.int_of_istr i)) r)
+            rl
+        in
+        rev_list.val := [Gwcomp.Relations x sex rl :: rev_list.val] ];
+  };
+  for i = 0 to Array.length pa - 1 do {
+    let p = pa.(i) in
+    let n = sa.(Adef.int_of_istr p.notes) in
+    if n = "" then ()
+    else
+      let pk = key_of_person sa p in
+      rev_list.val := [Gwcomp.Notes pk n :: rev_list.val];
+  };
+  if g_bnot = "" then ()
+  else rev_list.val := [Gwcomp.Bnotes "" g_bnot :: rev_list.val];
+  List.rev rev_list.val
+};
+
+(* Providing gw_syntax stream *)
+
+value next_family_fun_templ gw_syntax in_file fi = do {
+  fi.Db2link.f_curr_gwo_file := in_file;
+  let gw_syntax = ref gw_syntax in
+  fun () ->
+    match gw_syntax.val with
+    [ [x :: l] -> do { gw_syntax.val := l; Some x }
+    | [] -> None ]
+};
+
+(* Main *)
 
 value set_undefined_death_interval s =
   try
@@ -3027,8 +2606,6 @@ value set_undefined_death_interval s =
   [ Stream.Error _ -> raise (Arg.Bad "bad parameter for -udi")
   | e -> raise e ]
 ;
-
-(* Main *)
 
 value out_file = ref "a";
 value speclist =
@@ -3092,7 +2669,7 @@ be - First names enclosed -
    ("-no_nd", Arg.Set no_negative_dates, " \
 - No negative dates -
        Don't interpret a year preceded by a minus sign as a negative year");
-   ("-nc", Arg.Clear do_check, "\n       No consistency check");
+   ("-nc", Arg.Clear Db2link.do_check, "\n       No consistency check");
    ("-nopicture", Arg.Set no_picture, " \
 - Don't extract individual picture.");
    ("-udi", Arg.String set_undefined_death_interval, "\
@@ -3107,6 +2684,9 @@ x-y   - Undefined death interval -
    ("-ds", Arg.String (fun s -> default_source.val := s), " \
 - Default source -
        Set the source field for persons and families without source data");
+   ("-dn", Arg.String (fun s -> default_name.val := s), " \
+- Default name -
+       Set the first name or surname field for persons without name");
    ("-dates_dm", Arg.Unit (fun () -> month_number_dates.val := DayMonthDates),
     "\n       Interpret months-numbered dates as day/month/year");
    ("-dates_md", Arg.Unit (fun () -> month_number_dates.val := MonthDayDates),
@@ -3150,23 +2730,31 @@ The database \"%s\" already exists. Use option -f to overwrite it.
       exit 2
     }
     else ();
-    let arrays = make_arrays in_file.val in
-    Gc.compact ();
-    let arrays = make_subarrays arrays in
-    let base = make_base arrays bdir in
-    finish_base base arrays;
+    let gw_syntax = do {
+      let arrays = make_arrays in_file.val in
+      Gc.compact ();
+      let arrays = make_subarrays arrays in
+      flush log_oc.val;
+      make_gwsyntax arrays
+    }
+    in
     lock Mutil.lock_file out_file.val with
     [ Accept ->
-        do {
-          Outbase.output out_file.val base;
-          output_command_line out_file.val
+        let next_family_fun = next_family_fun_templ gw_syntax in_file.val in
+        if Db2link.link next_family_fun bdir then ()
+        else do {
+          eprintf "*** database not created\n";
+          flush stderr;
+          exit 2;
         }
-    | Refuse ->
-        do {
-          printf "Base is locked: cannot write it\n";
-          flush stdout;
-          exit 2
-        } ];
+    | Refuse -> do {
+        printf "Base is locked: cannot write it\n";
+        flush stdout;
+        exit 2
+      } ];
+(*
+    finish_base base arrays;
+*)
     warning_month_number_dates ();
     if log_oc.val != stdout then close_out log_oc.val else ()
   }
