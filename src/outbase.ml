@@ -204,8 +204,6 @@ value output_strings_hash oc2 base =
       taba.(ia) := i;
     };
     output_binary_int oc2 (Array.length taba);
-    output_binary_int oc2 0;
-    output_binary_int oc2 0;
     for i = 0 to Array.length taba - 1 do {
       output_binary_int oc2 taba.(i)
     };
@@ -215,7 +213,7 @@ value output_strings_hash oc2 base =
   }
 ;
 
-value output_surname_index oc2 base tmp_snames_inx tmp_snames_dat =
+value output_surname_index base tmp_snames_inx tmp_snames_dat =
   let module IstrTree =
     Btree.Make
       (struct
@@ -232,11 +230,6 @@ value output_surname_index oc2 base tmp_snames_inx tmp_snames_dat =
       in
       bt.val := IstrTree.add p.surname [p.key_index :: a] bt.val
     };
-    (* obsolete table: saved by compatibility with GeneWeb versions <= 4.09,
-       i.e. the created database can be still read by these versions but this
-       table will not be used in versions >= 4.10 *)
-    output_value_no_sharing oc2 (bt.val : IstrTree.t (list iper));
-    (* new table created from version >= 4.10 *)
     let oc_sn_dat = Secure.open_out_bin tmp_snames_dat in
     let bt2 =
       IstrTree.map
@@ -258,7 +251,7 @@ value output_surname_index oc2 base tmp_snames_inx tmp_snames_dat =
   }
 ;
 
-value output_first_name_index oc2 base tmp_fnames_inx tmp_fnames_dat =
+value output_first_name_index base tmp_fnames_inx tmp_fnames_dat =
   let module IstrTree =
     Btree.Make
       (struct
@@ -275,10 +268,6 @@ value output_first_name_index oc2 base tmp_fnames_inx tmp_fnames_dat =
       in
       bt.val := IstrTree.add p.first_name [p.key_index :: a] bt.val
     };
-    (* obsolete table: saved by compatibility with GeneWeb versions <= 4.09,
-       i.e. the created database can be still read by these versions but this
-       table will not be used in versions >= 4.10 *)
-    output_value_no_sharing oc2 (bt.val : IstrTree.t (list iper));
     (* new table created from version >= 4.10 *)
     let oc_fn_dat = Secure.open_out_bin tmp_fnames_dat in
     let bt2 =
@@ -413,19 +402,15 @@ value gen_output no_patches bname base =
               output_strings_hash oc2 base;
               if save_mem.val then do { trace "compacting"; Gc.compact () }
               else ();
-              let surname_pos = pos_out oc2 in
+              close_out oc2;
               trace "create surname index";
-              output_surname_index oc2 base tmp_snames_inx tmp_snames_dat;
+              output_surname_index base tmp_snames_inx tmp_snames_dat;
               if save_mem.val then do {
                 trace "compacting"; Gc.compact ()
               }
               else ();
-              let first_name_pos = pos_out oc2 in
               trace "create first name index";
-              output_first_name_index oc2 base tmp_fnames_inx tmp_fnames_dat;
-              seek_out oc2 int_size;
-              output_binary_int oc2 surname_pos;
-              output_binary_int oc2 first_name_pos;
+              output_first_name_index base tmp_fnames_inx tmp_fnames_dat;
               let s = base.data.bnotes.nread "" RnAll in
               if s = "" then ()
               else do {
@@ -433,7 +418,6 @@ value gen_output no_patches bname base =
                 output_string oc_not s;
                 close_out oc_not;
               };
-              close_out oc2;
               List.iter
                 (fun f ->
                    let s = base.data.bnotes.nread f RnAll in

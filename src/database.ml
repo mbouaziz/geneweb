@@ -62,8 +62,6 @@ type descend = dsk_descend;
 
     strings.inx - index for strings, surnames, first names
        length of the strings offset array : binary_int
-       offset of surnames index           : binary_int
-       offset of first names index        : binary_int
        strings hash table index           : 2 arrays of binary_ints
          strings offset array (length = prime after 10 * strings array length)
            - associating a hash value of the string modulo length
@@ -71,20 +69,6 @@ type descend = dsk_descend;
          strings list array (length = string array length)
            - associating a string index
            - to the index of the next index holding the same hash value
-       -- the following table has been obsolete since version 4.10
-       -- it has been replaced by snames.inx/sname.dat which use
-       -- much less memory
-       surnames index                     : value
-         binary tree
-          - associating the string index of a surname
-          - to the corresponding list of persons holding this surname
-       -- the following table has been obsolete since version 4.10
-       -- it has been replaced by fnames.inx/fname.dat which use
-       -- much less memory
-       first_names index                  : value
-         binary tree
-          - associating the string index of a first name
-          - to the corresponding list of persons holding this first name
 
     snames.inx - index for surnames
        binary tree
@@ -158,123 +142,8 @@ value index_of_string strings ic start_pos hash_len string_patches s =
         } ] ]
 ;
 
-value initial s =
-  loop 0 where rec loop i =
-    if i = String.length s then 0
-    else
-      match s.[i] with
-      [ 'A'..'Z' | 'À'..'Ý' -> i
-      | _ -> loop (succ i) ]
-;
-
-value rec list_remove_elemq x =
-  fun
-  [ [y :: l] -> if x = y then l else [y :: list_remove_elemq x l]
-  | [] -> [] ]
-;
-
-(* compatibility with databases created with versions <= 4.09 *)
-(* should be removed after some time (when all databases will have
-   been rebuilt with version >= 4.10 *)
-value old_persons_of_first_name_or_surname base_data strings params =
-  let (ic2, start_pos, proj, person_patches, _, _, _) = params in
-  let module IstrTree =
-    Btree.Make
-      (struct
-         type t = dsk_istr;
-         value compare = compare_istr_fun base_data;
-       end)
-  in
-  let bt =
-    let btr = ref None in
-    let completed = ref False in
-    let update_bt gistro bt =
-      do {
-        let bt = ref bt in
-        Hashtbl.iter
-          (fun i p ->
-             let istr = proj p in
-             if gistro <> None && gistro <> Some istr then ()
-             else
-               let ipera =
-                 try IstrTree.find istr bt.val with [ Not_found -> [] ]
-               in
-               if List.mem (Adef.iper_of_int i) ipera then ()
-               else
-                 bt.val :=
-                   IstrTree.add istr [Adef.iper_of_int i :: ipera] bt.val)
-          person_patches;
-        if gistro = None then completed.val := True else ();
-        bt.val
-      }
-    in
-    fun gistro ->
-      match btr.val with
-      [ Some bt ->
-          if completed.val then bt
-          else
-            let bt = update_bt gistro bt in
-            do { btr.val := Some bt; bt }
-      | None ->
-          match (ic2, start_pos) with
-          [ (Some ic2, Some start_pos) -> do {
-              seek_in ic2 start_pos;
-(*
-let ab1 = Gc.allocated_bytes () in
-*)
-              let bt : IstrTree.t (list iper) = input_value ic2 in
-(*
-let ab2 = Gc.allocated_bytes () in
-*)
-              let bt = update_bt gistro bt in
-              btr.val := Some bt;
-(*
-Printf.eprintf "*** old database created by version <= 4.09\n"; flush stderr;
-Printf.eprintf "*** using index allocating here %.0f bytes\n"
-  (ab2 -. ab1);
-flush stderr;
-*)
-              bt
-            }
-          | _ -> do {
-              Printf.eprintf "Sorry, I really need strings.inx.\n";
-              flush stderr;
-              failwith "database access"
-            } ] ]
-  in
-  let compare = compare_istr_fun base_data in
-  let check_patches istr ipl =
-    let ipl = ref ipl in
-    do {
-      Hashtbl.iter
-        (fun i p ->
-           if List.mem (Adef.iper_of_int i) ipl.val then
-             if compare istr p.first_name = 0 ||
-                compare istr p.surname = 0
-             then
-               ()
-             else ipl.val := list_remove_elemq (Adef.iper_of_int i) ipl.val
-           else ())
-        person_patches;
-      ipl.val
-    }
-  in
-  let find istr =
-    try check_patches istr (IstrTree.find istr (bt (Some istr))) with
-    [ Not_found -> [] ]
-  in
-  let cursor str =
-    IstrTree.key_after
-      (fun key ->
-         compare_names base_data str (strings.get (Adef.int_of_istr key)))
-      (bt None)
-  in
-  let next key = IstrTree.next key (bt None) in
-  {find = find; cursor = cursor; next = next}
-;
-
-value new_persons_of_first_name_or_surname base_data strings params =
-  let (_, _, proj, person_patches, names_inx, names_dat, bname) = params in
+value persons_of_first_name_or_surname base_data strings params =
+  let (proj, person_patches, names_inx, names_dat, bname) = params in
   let module IstrTree =
     Btree.Make
       (struct
@@ -298,7 +167,6 @@ let ab1 = Gc.allocated_bytes () in
             let bt : IstrTree.t int = input_value ic_inx in
 (*
 let ab2 = Gc.allocated_bytes () in
-Printf.eprintf "*** new database created by version >= 4.10\n";
 Printf.eprintf "*** using index '%s' allocating here only %.0f bytes\n"
   names_inx (ab2 -. ab1);
 flush stderr;
@@ -370,14 +238,6 @@ flush stderr;
   in
   let next key = IstrTree.next key (bt_patched ()) in
   {find = find; cursor = cursor; next = next}
-;
-
-value persons_of_first_name_or_surname base_data strings params =
-  let (_, _, _, _, names_inx, _, bname) = params in
-  if Sys.file_exists (Filename.concat bname names_inx) then
-    new_persons_of_first_name_or_surname base_data strings params
-  else
-    old_persons_of_first_name_or_surname base_data strings params
 ;
 
 (* Search index for a given name in file names.inx *)
@@ -873,16 +733,6 @@ value opendb bname =
     [ Some ic2 -> Some (input_binary_int ic2)
     | None -> None ]
   in
-  let ic2_surname_start_pos =
-    match ic2 with
-    [ Some ic2 -> Some (input_binary_int ic2)
-    | None -> None ]
-  in
-  let ic2_first_name_start_pos =
-    match ic2 with
-    [ Some ic2 -> Some (input_binary_int ic2)
-    | None -> None ]
-  in
   let shift = 0 in
   let persons =
     make_record_access ic ic_acc shift persons_array_pos patches.h_person
@@ -1120,12 +970,10 @@ value opendb bname =
      strings_of_fsname = strings_of_fsname bname strings patches.h_person;
      persons_of_surname =
        persons_of_first_name_or_surname base_data strings
-         (ic2, ic2_surname_start_pos, fun p -> p.surname,
-          snd patches.h_person, "snames.inx", "snames.dat", bname);
+         (fun p -> p.surname, snd patches.h_person, "snames.inx", "snames.dat", bname);
      persons_of_first_name =
        persons_of_first_name_or_surname base_data strings
-         (ic2, ic2_first_name_start_pos, fun p -> p.first_name,
-          snd patches.h_person, "fnames.inx", "fnames.dat", bname);
+         (fun p -> p.first_name, snd patches.h_person, "fnames.inx", "fnames.dat", bname);
      patch_person = patch_person; patch_ascend = patch_ascend;
      patch_union = patch_union; patch_family = patch_family;
      patch_couple = patch_couple; patch_descend = patch_descend;
