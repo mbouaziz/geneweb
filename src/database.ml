@@ -451,25 +451,6 @@ type patches_ht =
     h_name : Hashtbl.t int (list iper) }
 ;
 
-(* Old structure of file "patches", kept for backward compatibility.
-   After conversion, a new change will be saved with a magic number
-   (magic_patch) and a record "patch_ht" above. *)
-
-module Old =
-  struct
-    type patches =
-      { p_person : ref (list (int * person));
-        p_ascend : ref (list (int * ascend));
-        p_union : ref (list (int * union));
-        p_family : ref (list (int * family));
-        p_couple : ref (list (int * couple));
-        p_descend : ref (list (int * descend));
-        p_string : ref (list (int * string));
-        p_name : ref (list (int * list iper)) }
-    ;
-  end
-;
-
 value phony_person =
   {first_name = 0; surname = 0;
    occ = 0; image = 0; first_names_aliases = [];
@@ -622,35 +603,8 @@ value input_patches bname =
   [ Some ic -> do {
       let r =
         if check_patch_magic ic then (input_value ic : patches_ht)
-        else do {
-          (* old implementation of patches *)
-          seek_in ic 0;
-          let patches : Old.patches = input_value ic in
-          let ht =
-            {h_person = (ref 0, Hashtbl.create 1);
-             h_ascend = (ref 0, Hashtbl.create 1);
-             h_union = (ref 0, Hashtbl.create 1);
-             h_family = (ref 0, Hashtbl.create 1);
-             h_couple = (ref 0, Hashtbl.create 1);
-             h_descend = (ref 0, Hashtbl.create 1);
-             h_string = (ref 0, Hashtbl.create 1);
-             h_name = Hashtbl.create 1}
-          in
-          let add (ir, ht) (k, v) = do {
-            if k >= ir.val then ir.val := k + 1 else ();
-            Hashtbl.add ht k v;
-          }
-          in
-          List.iter (add ht.h_person) patches.Old.p_person.val;
-          List.iter (add ht.h_ascend) patches.Old.p_ascend.val;
-          List.iter (add ht.h_union) patches.Old.p_union.val;
-          List.iter (add ht.h_family) patches.Old.p_family.val;
-          List.iter (add ht.h_couple) patches.Old.p_couple.val;
-          List.iter (add ht.h_descend) patches.Old.p_descend.val;
-          List.iter (add ht.h_string) patches.Old.p_string.val;
-          List.iter (add (ref 0, ht.h_name)) patches.Old.p_name.val;
-          ht
-        }
+        else
+          failwith "Old patches file, please update your database"
       in
       close_in ic;
       r
