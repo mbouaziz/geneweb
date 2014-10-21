@@ -177,8 +177,4 @@ value date_of_last_change : base -> float;
 (**/**)
 (** For database builders *)
 
-value base_of_base1 : Dbdisk.dsk_base -> base;
-value dsk_person_of_person : person -> Dbdisk.dsk_person;
-
-value apply_base1 : base -> (Dbdisk.dsk_base -> unit) -> unit;
 value apply_base2 : base -> (Db2disk.db2 -> unit) -> unit;
