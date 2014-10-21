@@ -886,20 +886,8 @@ value fold_option fsome vnone =
   | None -> vnone ]
 ;
 
-value changed_p (ip, p, o_sex, o_rpar) =
-  let p = Gwdb.dsk_person_of_person p in
-  let _p =
-    {(p) with
-     sex = fold_option (fun s -> s) p.sex o_sex;
-     rparents =
-       fold_option
-         (List.map
-            (Futil.map_relation_ps (fun p -> p)
-               (fun s -> Adef.istr_of_int 0)))
-         p.rparents o_rpar}
-  in
-  let i = Adef.int_of_iper ip in
-  do { Printf.eprintf "person %d not changed\n" i; flush stderr }
+value changed_p _ =
+  failwith "not impl dsk_person_of_person"
 ;
 
 value mkdir_and_open_out_field_unknown_size tmp_dir (name, valu) = do {
