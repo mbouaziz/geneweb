@@ -61,9 +61,9 @@ dag.cmx: buff.cmx config.cmi ../dag2html/dag2html.cmx date.cmx def.cmi \
     gutil.cmx gwdb.cmx hutil.cmx mutil.cmx name.cmx num.cmx templ.cmx \
     templAst.cmi util.cmx ../wserver/wserver.cmx dag.cmi
 dag.cmi: config.cmi ../dag2html/dag2html.cmi def.cmi gwdb.cmi
-database.cmo: adef.cmi btree.cmo buff.cmo dbdisk.cmi def.cmi dutil.cmi \
+database.cmo: adef.cmi buff.cmo dbdisk.cmi def.cmi dutil.cmi \
     iovalue.cmi mutil.cmi name.cmi secure.cmi database.cmi
-database.cmx: adef.cmx btree.cmx buff.cmx dbdisk.cmi def.cmi dutil.cmx \
+database.cmx: adef.cmx buff.cmx dbdisk.cmi def.cmi dutil.cmx \
     iovalue.cmx mutil.cmx name.cmx secure.cmx database.cmi
 database.cmi: dbdisk.cmi
 date.cmo: adef.cmi buff.cmo calendar.cmi checkItem.cmi config.cmi def.cmi \
@@ -246,9 +246,9 @@ notesLinks.cmx: def.cmi mutil.cmx name.cmx notesLinks.cmi
 notesLinks.cmi: def.cmi
 num.cmo: num.cmi
 num.cmx: num.cmi
-outbase.cmo: adef.cmi btree.cmo dbdisk.cmi def.cmi dutil.cmi iovalue.cmi \
+outbase.cmo: adef.cmi dbdisk.cmi def.cmi dutil.cmi iovalue.cmi \
     mutil.cmi name.cmi secure.cmi outbase.cmi
-outbase.cmx: adef.cmx btree.cmx dbdisk.cmi def.cmi dutil.cmx iovalue.cmx \
+outbase.cmx: adef.cmx dbdisk.cmi def.cmi dutil.cmx iovalue.cmx \
     mutil.cmx name.cmx secure.cmx outbase.cmi
 outbase.cmi: dbdisk.cmi
 perso.cmo: adef.cmi buff.cmo checkItem.cmi config.cmi dag.cmi date.cmi \

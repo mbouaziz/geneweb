@@ -147,7 +147,7 @@ value output_strings_hash oc2 base =
 
 value output_surname_index base tmp_snames_inx tmp_snames_dat =
   let module IstrTree =
-    Btree.Make
+    Map.Make
       (struct
          type t = dsk_istr;
          value compare = compare_istr_fun base.data;
@@ -185,7 +185,7 @@ value output_surname_index base tmp_snames_inx tmp_snames_dat =
 
 value output_first_name_index base tmp_fnames_inx tmp_fnames_dat =
   let module IstrTree =
-    Btree.Make
+    Map.Make
       (struct
          type t = dsk_istr;
          value compare = compare_istr_fun base.data;

@@ -145,7 +145,7 @@ value index_of_string strings ic start_pos hash_len string_patches s =
 value persons_of_first_name_or_surname base_data strings params =
   let (proj, person_patches, names_inx, names_dat, bname) = params in
   let module IstrTree =
-    Btree.Make
+    Map.Make
       (struct
          type t = dsk_istr;
          value compare = compare_istr_fun base_data;
