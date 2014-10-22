@@ -150,7 +150,7 @@ value ascends_array :
     (int -> option ifam *
      int -> Adef.fix *
      int -> Adef.fix -> unit *
-     option (array Adef.fix));
+     array Adef.fix);
 
 value base_notes_read : base -> string -> string;
 value base_notes_read_first_line : base -> string -> string;

@@ -3,4 +3,4 @@
 
 open Gwdb;
 
-value compute : base -> int -> bool -> bool -> option (array Adef.fix);
+value compute : base -> int -> bool -> bool -> array Adef.fix;

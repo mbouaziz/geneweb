@@ -762,7 +762,7 @@ type base =
     ascends_array :
       unit ->
         (int -> option ifam * int -> Adef.fix * int -> Adef.fix -> unit *
-         option (array Adef.fix));
+         array Adef.fix);
     base_notes_read : string -> string;
     base_notes_read_first_line : string -> string;
     base_notes_are_empty : string -> bool;
@@ -1002,7 +1002,7 @@ value base2 db2 =
        let fget i = ptab.(i) in
        let cget i = cg_tab.(i) in
        let cset i v = cg_tab.(i) := v in
-       (fget, cget, cset, Some cg_tab);
+       (fget, cget, cset, cg_tab);
      base_notes_read fnotes = read_notes db2 fnotes RnAll;
      base_notes_read_first_line fnotes = read_notes db2 fnotes Rn1Ln;
      base_notes_are_empty fnotes = read_notes db2 fnotes RnDeg = "";

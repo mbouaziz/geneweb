@@ -432,9 +432,7 @@ value rebuild_fields2 db2 = do {
     ["family"; "person"; "person_of_key"; "person_of_name"];
 };
 
-value simple_output bname base carray =
-  match carray with
-  [ Some tab ->
+value simple_output bname base tab =
       Gwdb.apply_base2 base
         (fun db2 -> do {
            let bdir = db2.Db2disk.bdir2 in
@@ -473,14 +471,6 @@ value simple_output bname base carray =
            }
            else ();
          })
-  | None ->
-      Gwdb.apply_base1 base
-        (fun base ->
-           let bname = base.Dbdisk.data.Dbdisk.bdir in
-           let no_patches =
-             not (Sys.file_exists (Filename.concat bname "patches"))
-           in
-           Outbase.gen_output (no_patches && not indexes.val) bname base) ]
 ;
 
 value designation base p =
