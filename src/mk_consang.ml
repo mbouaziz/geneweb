@@ -5,7 +5,6 @@
 open Printf;
 
 value fname = ref "";
-value indexes = ref False;
 value scratch = ref False;
 value quiet = ref False;
 value tlim = ref (-1);
@@ -13,7 +12,6 @@ value tlim = ref (-1);
 value errmsg = "usage: " ^ Sys.argv.(0) ^ " [options] <file_name>";
 value speclist =
   [("-q", Arg.Set quiet, ": quiet mode");
-   ("-i", Arg.Set indexes, ": build the indexes again");
    ("-t", Arg.Int (fun i -> tlim.val := i), " <int>: time limit in seconds");
    ("-scratch", Arg.Set scratch, ": from scratch");
    ("-mem", Arg.Set Outbase.save_mem,
