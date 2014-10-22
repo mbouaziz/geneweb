@@ -338,309 +338,6 @@ value translate_title conf =
   (Printf.sprintf (ftransl conf "book of %s") title, title)
 ;
 
-
-(* ************************************************************************** *)
-(*  [Fonc] print_title : config -> base -> string -> int -> unit              *)
-(** [Description] : Affiche le titre du dictionnaire en fonction de data et
-                    de la longueur de la liste
-    [Args] :
-      - conf : configuration
-      - base : base
-      - ini  : les premières lettres de la source
-      - len  : le nombre de sources commençant par ini
-    [Retour] : Néant
-    [Rem] : Non exporté en clair hors de ce module.                           *)
-(* ************************************************************************** *)
-value print_title conf base ini len = do {
-  let (book_of, title) = translate_title conf in
-  Wserver.wprint "%s" (capitale book_of);
-  if ini = "" then
-    Wserver.wprint " (%d %s)" len title
-  else do {
-    Wserver.wprint " - ";
-    Wserver.wprint
-      (fcapitale (ftransl conf "%d %s starting with %s")) len title ini }
-};
-
-
-(* ************************************************************************** *)
-(*  [Fonc] print_long : config -> base -> (string * (string * int) list) list
-                           -> int -> unit                                     *)
-(** [Description] : Affiche le tableau des "data" en leur associant une clé
-                    unique afin de pouvoir mettre un champs de modification.
-    [Args] :
-      - conf : configuration
-      - base : base
-      - list : liste de couple (data, (type (= bi, occu ...) * clé) list)
-      - len  : la longueur de la liste
-    [Retour] : Néant
-    [Rem] : Non exporté en clair hors de ce module.                           *)
-(* ************************************************************************** *)
-value print_long conf base list len =
-  let env_keys =
-    let list = ref [] in
-    let keys = List.map fst (fst (get_data conf)) in
-    let _ =
-      List.map
-        (fun key ->
-          match p_getint conf.env key with
-          [ Some hash -> list.val := [ (key, hash) :: list.val ]
-          | None -> () ] )
-        keys
-    in List.sort (fun (s1, _) (s2, _) -> compare s1 s2) list.val
-  in
-  let data =
-    match p_getenv conf.env "data" with
-    [ Some s -> s
-    | None -> "" ]
-  in
-  let ini =
-    match p_getenv conf.env "s" with
-    [ Some s -> s
-    | None -> "" ]
-  in
-  (* Construit à partir de la liste de (src * hash) la liste dont      *)
-  (* le premier composant est les premières lettres de la sources.     *)
-  (* Attention, il ne faut pas faire String.length ini + 1 parce qu'en *)
-  (* utf8, il se peut que le caractère soit codé sur plusieurs octets. *)
-  let list =
-    List.map
-      (fun (s, k) ->
-        let ini =
-          if String.length s > String.length ini then
-            String.sub s 0 (index_of_next_char s (String.length ini))
-          else ini
-        in (ini, s, k))
-      list
-  in
-  (* Re-combine la liste en fonction des premières *)
-  (* lettres afin de pouvoir poser des ancres.     *)
-  let list = combine_by_ini ini list in
-  (* Astuce pour gérer les espaces. *)
-  let list = List.map (fun (ini, l) -> (Mutil.tr ' ' '_' ini, l)) list in
-  let list =
-    List.sort (fun (ini1, _) (ini2,_) -> Gutil.alphabetic_order ini1 ini2) list
-  in
-  do {
-    let title _ = print_title conf base (Mutil.tr '_' ' ' ini) len in
-    Hutil.header conf title;
-    print_link_to_welcome conf True;
-    tag "div" "class=\"tips\"" begin
-      tag "table" begin
-        tag "tr" begin
-          tag "td" begin
-            Wserver.wprint "%s" (capitale (transl conf "help modify data")) ;
-          end;
-        end;
-      end;
-    end;
-    xtag "br";
-    (* Ancre en haut de page afin de naviguer plus facilement. *)
-    tag "table" "class=\"display_search\"" begin
-      stag "tr" begin
-        List.iter
-          (fun (ini, _) ->
-             stag "td" begin
-               stagn "a" "href=\"#%s\"" ini begin
-                 Wserver.wprint "%s" (no_html_tags ini);
-               end;
-             end)
-        list;
-      end;
-    end;
-    xtag "br";
-    tag "form" "method=\"post\" action=\"%s\"" conf.command begin
-      tag "ul" begin
-        List.iter
-          (fun (ini_k, list) -> do {
-            tag "li" begin
-              stagn "a" "id=\"%s\"" ini_k begin
-                Wserver.wprint "%s" (no_html_tags ini_k);
-            end;
-            tag "ul" "class=\"mod_data_ul\"" begin
-              let list =
-                List.sort
-                  (fun (s1, _) (s2, _) -> Gutil.alphabetic_order s1 s2)
-                  list
-              in
-              List.iter
-                (fun (s, k) -> do {
-                  let k = List.sort (fun (s1, _) (s2, _) -> compare s1 s2) k in
-                  tag "li" begin
-                    if k <> env_keys then
-                      let k =
-                        List.fold_left
-                          (fun accu (k, i) ->
-                            accu ^ k ^ "=" ^ (string_of_int i) ^ ";")
-                          "" k
-                      in
-                      stag "a" "href=\"%sm=MOD_DATA;data=%s;%s;s=%s#mod\""
-                        (commd conf) data k (code_varenv ini)
-                        begin
-                          Wserver.wprint "%s" (quote_escaped s);
-                        end
-                    else
-                      tag "table" "class=\"mod_data_table\"" begin
-                        tag "tr" begin
-                          tag "td" begin
-                            Wserver.wprint "<a name=\"mod\">&nbsp;</a>";
-                            (* envoie les données de façon masquée *)
-                            Util.hidden_env conf;
-                            List.iter
-                              (fun (s,i) ->
-                                xtag "input" "type=\"hidden\" name=\"%s\" value=\"%d\"" s i )
-                              env_keys ;
-                            xtag "input" "type=\"hidden\" name=\"m\" value=\"MOD_DATA_OK\"" ;
-                            xtag "input" "type=\"hidden\" name=\"data\" value=\"%s\"" data;
-                            xtag "input" "type=\"hidden\" name=\"s\" value=\"%s\"" ini;
-                            xtag "input" "type=\"text\" name=\"nx_input\" size=\"80\" maxlength=\"%d\" value=\"%s\" id=\"nx_input\""
-                              (if data = "src" then 300 else 200) (quote_escaped (only_printable s)) ;
-                          end;
-                          tag "td" begin
-                            xtag "input" "type=\"submit\" value=\"Ok\"" ;
-                          end;
-                        end;
-                      end;
-                  end; } )
-                list;
-              end;
-            end; } )
-          list;
-      end;
-    end;
-    Hutil.trailer conf ;
-  }
-;
-
-
-(* ************************************************************************* *)
-(*  [Fonc] print_short : config -> base -> (string * 'a) list -> int -> unit *)
-(** [Description] : Si le nombre de "data" est trop grand, on affiche les
-                    premières lettres de chaque "data".
-    [Args] :
-      - conf : configuration
-      - base : base
-      - list : la liste des "data"
-      - len  : la longueur de la liste
-    [Retour] : Néant
-    [Rem] : Non exporté en clair hors de ce module.                          *)
-(* ************************************************************************* *)
-value print_short conf base list len =
-  let data =
-    match p_getenv conf.env "data" with
-    [ Some s -> s
-    | None -> "" ]
-  in
-  let ini =
-    match p_getenv conf.env "s" with
-    [ Some s -> s
-    | None -> "" ]
-  in
-  (* Construit la liste des string commençant par ini. *)
-  (* Pour certaines données comme les sources, on peut *)
-  (* avoir beaucoup de sources qui commencent par les  *)
-  (* mêmes lettres. On calcul alors à partir de quelle *)
-  (* lettre de ini, les sources sont différentes.      *)
-  (* ex: eta -> etat -> etat_ -> ... -> etat_civil     *)
-  let rec build_ini l len =
-    (* Attention, il ne faut pas faire String.length     *)
-    (* ini + 1 parce qu'en utf8, il se peut que le       *)
-    (* caractère soit codé sur plusieurs octets.         *)
-    let ini_list =
-      List.rev_map
-        (fun (s, _) ->
-          if String.length s > len then
-            String.sub s 0 (index_of_next_char s len)
-          else s ^ String.make (len + 1 - String.length s) '_')
-        l
-    in
-    (* Fonction pour supprimer les doublons. *)
-    let remove_dup list =
-      StringSet.elements
-        (List.fold_left
-           (fun accu ini -> StringSet.add ini accu)
-           StringSet.empty list)
-    in
-    (* Astuce pour gérer les espaces. *)
-    let ini_list = List.rev_map (fun p -> Mutil.tr ' ' '_' p) ini_list in
-    let ini_list = remove_dup ini_list in
-    (* Si la liste des ini n'a qu'un élément, on calcul on 'rang' d'après *)
-    if List.length ini_list = 1 then build_ini list (len + 1)
-    else List.sort Gutil.alphabetic_order ini_list
-  in
-  let ini_list = build_ini list (String.length ini) in
-  do {
-    let title _ = print_title conf base (Mutil.tr '_' ' ' ini) len in
-    Hutil.header conf title;
-    print_link_to_welcome conf True;
-    Wserver.wprint "%s :" (capitale (transl conf "select a letter"));
-    tag "p" "class=\"list_ini\"" begin
-      List.iter
-        (fun s ->
-          stagn "a" "href=\"%sm=MOD_DATA;data=%s;s=%s\""
-            (commd conf) data (code_varenv s)
-            begin
-              Wserver.wprint "%s" (no_html_tags s);
-            end)
-        ini_list;
-    end;
-    Hutil.trailer conf
-  }
-;
-
-
-value max_results = 1000 ;
-
-
-(* ********************************************************************* *)
-(*  [Fonc] print_mod : config -> base -> unit                            *)
-(** [Description] : Récupère la liste de toutes les "données" de la base
-                    et en fonction du nombre de résultats, fait un
-                    affichage court ou un afficahge long.
-    [Args] :
-      - conf : configuration
-      - base : base
-    [Retour] : Néant
-    [Rem] : Non exporté en clair hors de ce module.                      *)
-(* ********************************************************************* *)
-value print_mod_old conf base =
-  (* Paramètre pour savoir par quoi commence la chaine. *)
-  let ini =
-    match p_getenv conf.env "s" with
-    [ Some s -> s
-    | None -> "" ]
-  in
-  (* Astuce pour gérer les espaces. *)
-  let ini = Mutil.tr '_' ' ' ini in
-  let list = get_all_data conf base in
-  (* On fait un rev_map (tail-rec) parce que si le nombre de *)
-  (* données est trop important, on casser la pile d'appels. *)
-  let list = List.rev_map (fun (istr, s, k) -> (sou base istr, s, k)) list in
-  (* On tri la liste avant de la combiner *)
-  (* sinon on n'élimine pas les doublons. *)
-  let list = List.sort (fun (s1, _, _) (s2, _, _) -> compare s1 s2) list in
-  (* On combine la liste parce qu'en gwc2, les données peuvent être à  *)
-  (* des adresses différentes. NB: on pourrait rassembler les lieux et *)
-  (* les sources dans un seul index pour de meilleures performances.   *)
-  let list = combine list in
-  (* Fonction qui à une liste de données retourne la *)
-  (* liste de toutes les données commençant par ini. *)
-  let reduce l =
-    List.fold_left
-      (fun acc (data, k) ->
-        let data_tmp =  Mutil.tr '_' ' ' data in
-        if Mutil.start_with ini data_tmp || (data_tmp ^ " " = ini) then
-          [ (data, k) :: acc ]
-        else acc )
-      [] l
-  in
-  let list = if ini <> "" then reduce list else list in
-  let len = List.length list in
-  if len > max_results then print_short conf base list len
-  else print_long conf base list len
-;
-
-
 (* ************************************************************************** *)
 (*  [Fonc] reduce_cpl_list : int -> ('a, 'b list) list -> ('a, 'b list) list  *)
 (** [Description] : Retourne la sous liste telle que la somme des longueurs
@@ -869,7 +566,7 @@ value print_mod_ok conf base = do {
   (* pour ne pas dépasser le time out du serveur.                    *)
   let max_updates =
     match p_getint conf.base_env "max_nb_update" with
-    [ Some n -> if n > 50000 then 5000 else n
+    [ Some n when n <= 50000 -> n
     | _ -> 5000 ]
   in
   if nb_pers <> 0 && data_modified then do {
@@ -1269,26 +966,23 @@ value print_foreach conf base print_ast eval_expr =
 ;
 
 value print_mod conf base =
-  (* Pas forcément nécessaire mais bon ... On pourra faire le ménage après. *)
-  if p_getenv conf.env "old" = Some "on" then print_mod_old conf base
-  else
-    match p_getenv conf.env "data" with
-    [ Some ("place" | "src" | "occu") ->
-        let list = build_list conf base in
-        let env = [("list", Vlist_data list)] in
-        Hutil.interp conf base "upddata"
-          {Templ.eval_var = eval_var conf base;
-           Templ.eval_transl _ = Templ.eval_transl conf;
-           Templ.eval_predefined_apply _ = raise Not_found;
-           Templ.get_vother = get_vother; Templ.set_vother = set_vother;
-           Templ.print_foreach = print_foreach conf base}
-          env ()
-    | _ ->
-        Hutil.interp conf base "upddatamenu"
-          {Templ.eval_var _ = raise Not_found;
-           Templ.eval_transl _ = Templ.eval_transl conf;
-           Templ.eval_predefined_apply _ = raise Not_found;
-           Templ.get_vother = get_vother; Templ.set_vother = set_vother;
-           Templ.print_foreach _ = raise Not_found}
-          [] () ]
+  match p_getenv conf.env "data" with
+  [ Some ("place" | "src" | "occu") ->
+    let list = build_list conf base in
+    let env = [("list", Vlist_data list)] in
+    Hutil.interp conf base "upddata"
+      {Templ.eval_var = eval_var conf base;
+       Templ.eval_transl _ = Templ.eval_transl conf;
+       Templ.eval_predefined_apply _ = raise Not_found;
+       Templ.get_vother = get_vother; Templ.set_vother = set_vother;
+       Templ.print_foreach = print_foreach conf base}
+      env ()
+  | _ ->
+    Hutil.interp conf base "upddatamenu"
+      {Templ.eval_var _ = raise Not_found;
+       Templ.eval_transl _ = Templ.eval_transl conf;
+       Templ.eval_predefined_apply _ = raise Not_found;
+       Templ.get_vother = get_vother; Templ.set_vother = set_vother;
+       Templ.print_foreach _ = raise Not_found}
+      [] () ]
 ;

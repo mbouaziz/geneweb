@@ -1,8 +1,6 @@
 (* camlp5r ./pa_html.cmo *)
 (* $Id: dag.ml,v 5.20 2007-09-12 09:58:44 ddr Exp $ *)
 
-DEFINE OLD;
-
 open Config;
 open Dag2html;
 open Def;
@@ -261,54 +259,6 @@ value string_of_item conf base =
         Date.short_dates_text conf base p ^
       (if s = "" then "" else " " ^ s) ]
 ;
-
-(* Print with HTML table tags: <table> <tr> <td> *)
-
-IFDEF OLD THEN declare
-value print_table conf hts =
-  do {
-    begin_centered conf;
-    Wserver.wprint "<table border=\"%d\"" conf.border;
-    Wserver.wprint " cellspacing=\"0\" cellpadding=\"0\">\n";
-    for i = 0 to Array.length hts - 1 do {
-      tag "tr" "align=\"left\"" begin
-        for j = 0 to Array.length hts.(i) - 1 do {
-          let (colspan, align, td) = hts.(i).(j) in
-          Wserver.wprint "<td";
-          if colspan = 1 && (td = TDnothing || td = TDhr CenterA) then
-            ()
-          else Wserver.wprint " colspan=\"%d\"" colspan;
-          match (align, td) with
-          [ (LeftA, TDhr LeftA) -> Wserver.wprint " align=\"%s\"" conf.left
-          | (LeftA, _) -> ()
-          | (CenterA, _) -> Wserver.wprint " align=\"center\""
-          | (RightA, _) -> Wserver.wprint " align=\"%s\"" conf.right ];
-          Wserver.wprint ">";
-          match td with
-          [ TDitem s -> Wserver.wprint "%s" s
-          | TDtext s -> Wserver.wprint "%s" s
-          | TDnothing -> Wserver.wprint "&nbsp;"
-          | TDbar None -> Wserver.wprint "|"
-          | TDbar (Some s) ->
-              Wserver.wprint
-                "<a style=\"text-decoration:none\" href=\"%s\">|</a>" s
-          | TDhr align ->
-              match align with
-              [ LeftA ->
-                  xtag "hr" "class=\"%s\"" conf.left
-              | RightA ->
-                  xtag "hr" "class=\"%s\"" conf.right
-              | _ ->
-                  xtag "hr" "class=\"full\"" ] ];
-          Wserver.wprint "</td>\n"
-        };
-      end;
-    };
-    Wserver.wprint "</table>\n";
-    end_centered conf;
-  }
-;
-end END;
 
 (*
  * Print without HTML table tags: using <pre>
@@ -628,215 +578,7 @@ value table_pre_dim conf hts =
   }
 ;
 
-IFDEF OLD THEN declare
-value print_next_pos conf pos1 pos2 tcol =
-  let doit = p_getenv conf.env "notab" = Some "on" in
-  if doit then do {
-    let dpos =
-      match p_getint conf.env "dpos" with
-      [ Some dpos -> dpos
-      | None -> 78 ]
-    in
-    let pos1 =
-      match pos1 with
-      [ Some pos1 -> pos1
-      | None -> 0 ]
-    in
-    let pos2 =
-      match pos2 with
-      [ Some pos2 -> pos2
-      | None -> dpos ]
-    in
-    let overlap =
-      let overlap =
-        match p_getint conf.env "overlap" with
-        [ Some x -> x
-        | None -> 10 ]
-      in
-      min overlap dpos
-    in
-    let env =
-      List.fold_right
-        (fun (k, v) env ->
-           match k with
-           [ "pos1" | "pos2" -> env
-           | _ -> [(k, v) :: env] ])
-        conf.env []
-    in
-    Wserver.wprint "<div style=\"text-align:right\">\n";
-    if pos1 = 0 then Wserver.wprint "&nbsp;"
-    else do {
-      Wserver.wprint "<a href=\"%s" (commd conf);
-      List.iter (fun (k, v) -> Wserver.wprint "%s=%s;" k v) env;
-      Wserver.wprint "pos1=%d;pos2=%d" (pos1 + overlap - dpos)
-        (pos1 + overlap);
-      Wserver.wprint "\">&lt;&lt;</a>\n"
-    };
-    if pos2 >= tcol then Wserver.wprint "&nbsp;"
-    else do {
-      Wserver.wprint "<a href=\"%s" (commd conf);
-      List.iter (fun (k, v) -> Wserver.wprint "%s=%s;" k v) env;
-      Wserver.wprint "pos1=%d;pos2=%d" (pos2 - overlap)
-        (pos2 - overlap + dpos);
-      Wserver.wprint "\">&gt;&gt;</a>\n"
-    };
-    Wserver.wprint "</div>\n"
-  }
-  else ()
-;
-
-(* Main print table algorithm with <pre> *)
-
-value print_table_pre conf hts =
-  let (tmincol, tcol, colminsz, colsz, ncol) = table_pre_dim conf hts in
-  let dcol =
-    let dcol =
-      match p_getint conf.env "width" with
-      [ Some i -> i
-      | None -> 79 ]
-    in
-    max tmincol (min dcol tcol)
-  in
-  do {
-    if tcol > tmincol then
-      for i = 0 to ncol - 1 do {
-        colsz.(i) :=
-          colminsz.(i) +
-            (colsz.(i) - colminsz.(i)) * (dcol - tmincol) / (tcol - tmincol)
-      }
-    else ();
-    let pos1 = p_getint conf.env "pos1" in
-    let pos2 =
-      match p_getint conf.env "pos2" with
-      [ None -> p_getint conf.env "dpos"
-      | x -> x ]
-    in
-    print_next_pos conf pos1 pos2 (Array.fold_left \+ 0 colsz);
-    Wserver.wprint "<pre>\n";
-    for i = 0 to Array.length hts - 1 do {
-      let (stra, max_row) =
-        let (stral, max_row) =
-          loop [] 1 0 0 where rec loop stral max_row col j =
-            if j = Array.length hts.(i) then (stral, max_row)
-            else
-              let (colspan, _, td) = hts.(i).(j) in
-              let stra =
-                match td with
-                [ TDitem s | TDtext s ->
-                    let sz =
-                      loop 0 colspan where rec loop sz k =
-                        if k = 0 then sz
-                        else loop (sz + colsz.(col + k - 1)) (k - 1)
-                    in
-                    Array.of_list (displayed_strip s sz)
-                | _ -> [| |] ]
-              in
-              loop [stra :: stral] (max max_row (Array.length stra))
-                (col + colspan) (j + 1)
-        in
-        (Array.of_list (List.rev stral), max_row)
-      in
-      for row = 0 to max_row - 1 do {
-        let rec loop pos col j =
-          if j = Array.length hts.(i) then Wserver.wprint "\n"
-          else do {
-            let (colspan, align, td) = hts.(i).(j) in
-            let sz =
-              loop 0 colspan where rec loop sz k =
-                if k = 0 then sz else loop (sz + colsz.(col + k - 1)) (k - 1)
-            in
-            let outs =
-              match td with
-              [ TDitem s | TDtext s ->
-                  let s =
-                    let k =
-                      let dk = (max_row - Array.length stra.(j)) / 2 in
-                      row - dk
-                    in
-                    if k >= 0 && k < Array.length stra.(j) then
-                      let s = stra.(j).(k) in
-                      if s = "&nbsp;" then " " else s
-                    else try_add_vbar k (Array.length stra.(j)) hts i col
-                  in
-                  let len = displayed_length s in
-                  String.make ((sz - len) / 2) ' ' ^ s ^
-                    String.make (sz - (sz + len) / 2) ' '
-              | TDnothing ->
-                  String.make ((sz - 1) / 2) ' ' ^ "&nbsp;" ^
-                    String.make (sz - (sz + 1) / 2) ' '
-              | TDbar s ->
-                  let s =
-                    match s with
-                    [ None | Some "" -> "|"
-                    | Some s ->
-                        sprintf
-                          "<a style=\"text-decoration:none\" href=\"%s\">|</a>"
-                          s ]
-                  in
-                  let len = displayed_length s in
-                  String.make ((sz - len) / 2) ' ' ^ s ^
-                    String.make (sz - (sz + len) / 2) ' '
-              | TDhr LeftA ->
-                  let len = (sz + 1) / 2 in
-                  String.make len '-' ^ String.make (sz - len) ' '
-              | TDhr RightA ->
-                  let len = sz / 2 in
-                  String.make (sz - len - 1) ' ' ^ String.make (len + 1) '-'
-              | TDhr CenterA -> String.make sz '-' ]
-            in
-            let clipped_outs =
-              if pos1 = None && pos2 = None then outs
-              else
-                let pos1 =
-                  match pos1 with
-                  [ Some pos1 -> pos1
-                  | None -> pos ]
-                in
-                let pos2 =
-                  match pos2 with
-                  [ Some pos2 -> pos2
-                  | None -> pos + sz ]
-                in
-                if pos + sz <= pos1 then ""
-                else if pos > pos2 then ""
-                else if pos2 >= pos + sz then
-                  displayed_sub outs (pos1 - pos) (pos + sz - pos1)
-                else if pos1 < pos then displayed_sub outs 0 (pos2 - pos)
-                else displayed_sub outs (pos1 - pos) (pos2 - pos1)
-            in
-            Wserver.wprint "%s" clipped_outs;
-            loop (pos + sz) (col + colspan) (j + 1)
-          }
-        in
-        loop 0 0 0
-      }
-    };
-    Wserver.wprint "</pre>\n"
-  }
-;
-
 (* main *)
-
-value print_html_table conf hts =
-  do {
-    if Util.p_getenv conf.env "notab" <> Some "on" then
-      tag "p" begin
-        Wserver.wprint "<div style=\"text-align:%s\"><a href=\"%s" conf.right
-          (commd conf);
-        List.iter (fun (k, v) -> Wserver.wprint "%s=%s;" k v) conf.env;
-        Wserver.wprint "notab=on;slices=on";
-        Wserver.wprint "\"><tt>//</tt></a></div>\n";
-      end
-    else ();
-    if Util.p_getenv conf.env "notab" = Some "on" ||
-       Util.p_getenv conf.env "pos2" <> None ||
-       browser_doesnt_have_tables conf
-    then
-      print_table_pre conf hts
-    else print_table conf hts
-  }
-;
-end END;
 
 value make_tree_hts conf base elem_txt vbar_txt invert set spl d =
   let no_group = p_getenv conf.env "nogroup" = Some "on" in
@@ -935,97 +677,6 @@ value make_tree_hts conf base elem_txt vbar_txt invert set spl d =
   if Array.length t.table = 0 then [| |]
   else Dag2html.html_table_struct indi_txt vbar_txt phony d t
 ;
-
-IFDEF OLD THEN declare
-value print_slices_menu conf hts =
-  let txt n =
-    Util.capitale
-      (transl_nth conf "display by slices/slice width/overlap/total width" n)
-  in
-  let title _ = Wserver.wprint "%s" (txt 0) in
-  do {
-    Hutil.header conf title;
-    Hutil.print_link_to_welcome conf True;
-    tag "form" "method=\"get\" action=\"%s\"" conf.command begin
-      html_p conf;
-      hidden_env conf;
-      List.iter
-        (fun (k, v) ->
-           if k = "slices" then ()
-           else
-             Wserver.wprint
-               "<input type=\"hidden\" name=\"%s\" value=\"%s\">\n"
-               (decode_varenv k) (decode_varenv v))
-        conf.env;
-      tag "table" begin
-        tag "tr" "align=\"left\"" begin
-          tag "td" "align=\"right\"" begin
-            Wserver.wprint "%s\n"
-              (Util.capitale
-                 (transl conf "don't group the common branches together"));
-            Wserver.wprint
-              "<input type=\"checkbox\" name=\"nogroup\" value=\"on\">\n";
-          end;
-        end;
-        tag "tr" "align=\"left\"" begin
-          tag "td" "align=\"right\"" begin
-            Wserver.wprint "%s\n" (txt 1);
-            Wserver.wprint "<input name=\"dpos\" size=\"5\" value=\"78\">\n";
-          end;
-        end;
-        tag "tr" "align=\"left\"" begin
-          tag "td" "align=\"right\"" begin
-            Wserver.wprint "%s\n" (txt 2);
-            Wserver.wprint
-              "<input name=\"overlap\" size=\"5\" value=\"10\">\n";
-          end;
-        end;
-        tag "tr" "align=\"left\"" begin
-          tag "td" "align=\"right\"" begin
-            Wserver.wprint "%s\n" (txt 3);
-            let wid =
-              let (min_wid, max_wid, _, _, _) = table_pre_dim conf hts in
-              do {
-                Wserver.wprint "(%d-%d)\n" min_wid max_wid;
-                max min_wid (min max_wid 78)
-              }
-            in
-            Wserver.wprint "<input name=\"width\" size=\"5\" value=\"%d\">\n"
-              wid;
-          end;
-        end;
-      end;
-      html_p conf;
-      Wserver.wprint "<input type=\"submit\" value=\"Ok\">\n";
-    end;
-    Hutil.trailer conf
-  }
-;
-
-value print_dag_page conf base page_title hts next_txt =
-  let conf =
-    let doctype =
-      (* changing doctype to transitional because use of
-         <hr width=... align=...> *)
-      match p_getenv conf.base_env "doctype" with
-      [ Some ("html-4.01" | "html-4.01-trans") -> "html-4.01-trans"
-      | _ -> "xhtml-1.0-trans" ]
-    in
-    {(conf) with base_env = [("doctype", doctype) :: conf.base_env]}
-  in
-  let title _ = Wserver.wprint "%s" page_title in
-  do {
-    Hutil.header_no_page_title conf title;
-    print_html_table conf hts;
-    if next_txt <> "" then
-      tag "p" begin
-        Wserver.wprint "<a href=\"%s%s\">&gt;&gt;</a>\n" (commd conf) next_txt;
-      end
-    else ();
-    Hutil.trailer conf
-  }
-;
-end END;
 
 (* *)
 
@@ -1269,22 +920,7 @@ and print_foreach_dag_line_pre conf hts print_ast env al =
   }
 ;
 
-IFDEF OLD THEN declare
-value old_print_slices_menu_or_dag_page conf base page_title hts next_txt =
-  if p_getenv conf.env "slices" = Some "on" then print_slices_menu conf hts
-  else print_dag_page conf base page_title hts next_txt
-;
-end ELSE declare
-value old_print_slices_menu_or_dag_page conf base page_title hts next_txt =
-  incorrect_request conf
-;
-end END;
-
 value print_slices_menu_or_dag_page conf base page_title hts next_txt =
-(**)
-  if p_getenv conf.env "old" = Some "on" then
-    old_print_slices_menu_or_dag_page conf base page_title hts next_txt else
-(**)
   let env =
     let table_pre_dim () =
       let (tmincol, tcol, colminsz, colsz, ncol) = table_pre_dim conf hts in
@@ -1319,8 +955,7 @@ value print_slices_menu_or_dag_page conf base page_title hts next_txt =
 ;
 
 value make_and_print_dag conf base elem_txt vbar_txt invert set spl
-  page_title next_txt
-=
+  page_title next_txt =
   let d = make_dag conf base set in
   let hts = make_tree_hts conf base elem_txt vbar_txt invert set spl d in
   print_slices_menu_or_dag_page conf base page_title hts next_txt

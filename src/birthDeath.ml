@@ -497,57 +497,6 @@ value print_oldest_engagements conf base =
   print_marr_or_eng conf base title list len
 ;
 
-value old_print_statistics conf base =
-  let title _ = Wserver.wprint "%s" (capitale (transl conf "statistics")) in
-  let n =
-    try int_of_string (List.assoc "latest_event" conf.base_env) with
-    [ Not_found | Failure _ -> 20 ]
-  in
-  do {
-    header conf title;
-    print_link_to_welcome conf True;
-    tag "ul" begin
-      if conf.wizard || conf.friend then do {
-        stagn "li" begin
-          Wserver.wprint "<a href=\"%sm=LB;k=%d\">" (commd conf) n;
-          Wserver.wprint (ftransl conf "the latest %d births") n;
-          Wserver.wprint "</a>";
-        end;
-        stagn "li" begin
-          Wserver.wprint "<a href=\"%sm=LD;k=%d\">" (commd conf) n;
-          Wserver.wprint (ftransl conf "the latest %t deaths")
-            (fun _ -> string_of_int n);
-          Wserver.wprint "</a>";
-        end;
-        stagn "li" begin
-          Wserver.wprint "<a href=\"%sm=LM;k=%d\">" (commd conf) n;
-          Wserver.wprint (ftransl conf "the latest %d marriages") n;
-          Wserver.wprint "</a>";
-        end;
-        stagn "li" begin
-          Wserver.wprint "<a href=\"%sm=OE;k=%d\">" (commd conf) n;
-          Wserver.wprint
-            (ftransl conf
-               "the %d oldest couples perhaps still alive and engaged") n;
-          Wserver.wprint "</a>";
-        end;
-        stagn "li" begin
-          Wserver.wprint "<a href=\"%sm=OA;k=%d;lim=0\">" (commd conf) n;
-          Wserver.wprint (ftransl conf "the %d oldest perhaps still alive") n;
-          Wserver.wprint "</a>";
-        end
-      }
-      else ();
-      stagn "li" begin
-        Wserver.wprint "<a href=\"%sm=LL;k=%d\">" (commd conf) n;
-        Wserver.wprint (ftransl conf "the %d who lived the longest") n;
-        Wserver.wprint "</a>";
-      end;
-    end;
-    trailer conf;
-  }
-;
-
 (* *)
 
 type env 'a =
@@ -559,8 +508,6 @@ value get_vother = fun [ Vother x -> Some x | _ -> None ];
 value set_vother x = Vother x;
 
 value print_statistics conf base =
-  if p_getenv conf.env "old" = Some "on" then old_print_statistics conf base
-  else
   Hutil.interp conf base "stats"
     {Templ.eval_var _ = raise Not_found;
      Templ.eval_transl _ = Templ.eval_transl conf;
