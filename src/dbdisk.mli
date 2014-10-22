@@ -29,9 +29,7 @@ type record_access 'a =
 ;
 
 type string_person_index 'istr =
-  { find : 'istr -> list iper;
-    cursor : string -> 'istr;
-    next : 'istr -> 'istr }
+  { find : 'istr -> list iper }
 ;
 
 type visible_record_access =

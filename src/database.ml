@@ -209,35 +209,7 @@ flush stderr;
       ipera.val
     }
   in
-  let bt_patched =
-    let btr = ref None in
-    fun () ->
-      match btr.val with
-      [ Some bt -> bt
-      | None ->
-          let bt = ref (bt ()) in
-          do {
-            Hashtbl.iter
-              (fun i p ->
-                 let istr1 = proj p in
-                 try
-                   let _ = IstrTree.find istr1 bt.val in
-                   ()
-                 with
-                 [ Not_found -> bt.val := IstrTree.add istr1 0 bt.val ])
-              person_patches;
-            btr.val := Some bt.val;
-            bt.val
-          } ]
-  in
-  let cursor str =
-    IstrTree.key_after
-      (fun key ->
-         compare_names base_data str (strings.get (Adef.int_of_istr key)))
-      (bt_patched ())
-  in
-  let next key = IstrTree.next key (bt_patched ()) in
-  {find = find; cursor = cursor; next = next}
+  {find = find}
 ;
 
 (* Search index for a given name in file names.inx *)

@@ -226,8 +226,8 @@ value input bname =
   let base_func =
     {person_of_key = fun []; persons_of_name = fun [];
      strings_of_fsname = fun [];
-     persons_of_surname = {find = fun []; cursor = fun []; next = fun []};
-     persons_of_first_name = {find = fun []; cursor = fun []; next = fun []};
+     persons_of_surname = {find = fun []};
+     persons_of_first_name = {find = fun []};
      patch_person = fun []; patch_ascend = fun [];
      patch_union = fun []; patch_family = fun []; patch_couple = fun [];
      patch_descend = fun []; patch_name = fun []; insert_string = fun [];
