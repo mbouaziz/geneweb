@@ -271,10 +271,10 @@ pqueue.cmx: pqueue.cmi
 progrBar.cmo: progrBar.cmi
 progrBar.cmx: progrBar.cmi
 relation.cmo: adef.cmi config.cmi consang.cmi dag.cmi \
-    ../dag2html/dag2html.cmi def.cmi gutil.cmi gwdb.cmi hutil.cmi num.cmi \
+    def.cmi gutil.cmi gwdb.cmi hutil.cmi num.cmi \
     perso.cmi relationLink.cmi util.cmi ../wserver/wserver.cmi
 relation.cmx: adef.cmx config.cmi consang.cmx dag.cmx \
-    ../dag2html/dag2html.cmx def.cmi gutil.cmx gwdb.cmx hutil.cmx num.cmx \
+    def.cmi gutil.cmx gwdb.cmx hutil.cmx num.cmx \
     perso.cmx relationLink.cmx util.cmx ../wserver/wserver.cmx
 relationLink.cmo: adef.cmi config.cmi dag.cmi date.cmi def.cmi gwdb.cmi \
     hutil.cmi num.cmi pqueue.cmi util.cmi ../wserver/wserver.cmi \

@@ -2,8 +2,6 @@
 (* $Id: relation.ml,v 5.22 2008-01-12 01:49:50 ddr Exp $ *)
 (* Copyright (c) 1998-2007 INRIA *)
 
-DEFINE OLD;
-
 open Config;
 open Def;
 open Gutil;
@@ -25,180 +23,6 @@ type famlink =
   | Child ]
 ;
 
-IFDEF OLD THEN declare
-open Dag2html;
-
-type dag_ind 'a =
-  { di_val : 'a; di_famc : mutable dag_fam 'a; di_fams : mutable dag_fam 'a }
-and dag_fam 'a =
-  { df_pare : mutable list (dag_ind 'a); df_chil : list (dag_ind 'a) }
-;
-
-value dag_ind_list_of_path path =
-  let (indl, _) =
-    let merge l1 l2 = if l1 == l2 then l1 else l1 @ l2 in
-    List.fold_left
-      (fun (indl, prev_ind) (ip, fl) ->
-         let (ind, indl) =
-           try (List.find (fun di -> di.di_val = Some ip) indl, indl) with
-           [ Not_found ->
-               let rec ind =
-                 {di_val = Some ip; di_famc = famc; di_fams = fams}
-               and famc = {df_pare = []; df_chil = [ind]}
-               and fams = {df_pare = [ind]; df_chil = []} in
-               (ind, [ind :: indl]) ]
-         in
-         let fam =
-           match prev_ind with
-           [ None -> {df_pare = []; df_chil = []}
-           | Some p_ind ->
-               match fl with
-               [ Parent ->
-                   {df_pare = merge p_ind.di_famc.df_pare ind.di_fams.df_pare;
-                    df_chil = merge p_ind.di_famc.df_chil ind.di_fams.df_chil}
-               | Child ->
-                   {df_pare = merge p_ind.di_fams.df_pare ind.di_famc.df_pare;
-                    df_chil = merge p_ind.di_fams.df_chil ind.di_famc.df_chil}
-               | Sibling | HalfSibling ->
-                   {df_pare = merge p_ind.di_famc.df_pare ind.di_famc.df_pare;
-                    df_chil = merge p_ind.di_famc.df_chil ind.di_famc.df_chil}
-               | Mate ->
-                   {df_pare = merge p_ind.di_fams.df_pare ind.di_fams.df_pare;
-                    df_chil = merge p_ind.di_fams.df_chil ind.di_fams.df_chil}
-               | Self -> {df_pare = []; df_chil = []} ] ]
-         in
-         do {
-           List.iter (fun ind -> ind.di_famc := fam) fam.df_chil;
-           List.iter (fun ind -> ind.di_fams := fam) fam.df_pare;
-           (indl, Some ind)
-         })
-      ([], None) (List.rev path)
-  in
-  indl
-;
-
-value add_missing_parents_of_siblings conf base indl =
-  List.fold_right
-    (fun ind indl ->
-       let indl =
-         match ind.di_famc with
-         [ {df_pare = []; df_chil = [_]} -> indl
-         | {df_pare = []; df_chil = children} ->
-             let ipl =
-               List.fold_right
-                 (fun ind ipl ->
-                    match ind.di_val with
-                    [ Some ip ->
-                        let ip =
-                          match get_parents (pget conf base ip) with
-                          [ Some ifam -> get_father (foi base ifam)
-                          | None -> assert False ]
-                        in
-                        if List.mem ip ipl then ipl else [ip :: ipl]
-                    | _ -> assert False ])
-                 children []
-             in
-             let fams = {df_pare = []; df_chil = children} in
-             let indl1 =
-               List.fold_left
-                 (fun indl ip ->
-                    let rec indp =
-                      {di_val = Some ip; di_famc = famc; di_fams = fams}
-                    and famc = {df_pare = []; df_chil = [indp]} in
-                    do {
-                      fams.df_pare := [indp :: fams.df_pare];
-                      [indp :: indl]
-                    })
-                 [] ipl
-             in
-             do {
-               List.iter (fun ind -> ind.di_famc := fams) children;
-               indl1 @ indl
-             }
-         | _ -> indl ]
-       in
-       [ind :: indl])
-    indl []
-;
-
-value dag_fam_list_of_ind_list indl =
-  List.fold_left
-    (fun faml ind ->
-       let faml =
-         if List.mem ind.di_famc faml then faml else [ind.di_famc :: faml]
-       in
-       if List.mem ind.di_fams faml then faml else [ind.di_fams :: faml])
-    [] indl
-;
-
-value add_phony_children indl faml =
-  List.fold_right
-    (fun fam (indl, faml) ->
-       match fam with
-       [ {df_pare = [_]; df_chil = []} -> (indl, [fam :: faml])
-       | {df_pare = pare; df_chil = []} ->
-           let rec ind = {di_val = None; di_famc = famc; di_fams = fams}
-           and famc = {df_pare = pare; df_chil = [ind]}
-           and fams = {df_pare = [ind]; df_chil = []} in
-           do {
-             List.iter (fun ind -> ind.di_fams := famc) pare;
-             ([ind :: indl], [famc; fams :: faml])
-           }
-       | _ -> (indl, [fam :: faml]) ])
-    faml (indl, [])
-;
-
-value dag_of_ind_dag_list indl =
-  let (indl, _) =
-    List.fold_right (fun ind (indl, cnt) -> ([(ind, cnt) :: indl], cnt + 1))
-      indl ([], 0)
-  in
-  let idag_of_di_ind ind = idag_of_int (List.assq ind indl) in
-  List.map
-    (fun (ind, cnt) ->
-       {pare = List.map idag_of_di_ind ind.di_famc.df_pare;
-        valu =
-          match ind.di_val with
-          [ Some ic -> Dag.Left ic
-          | None -> Dag.Right cnt ];
-        chil = List.map idag_of_di_ind ind.di_fams.df_chil})
-    indl
-;
-
-value dag_of_relation_path conf base path =
-  let indl = dag_ind_list_of_path path in
-  let indl = add_missing_parents_of_siblings conf base indl in
-  let faml = dag_fam_list_of_ind_list indl in
-  let (indl, faml) = add_phony_children indl faml in
-  let nl = dag_of_ind_dag_list indl in
-  let d = {dag = Array.of_list (List.rev nl)} in
-  let set =
-    List.fold_left
-      (fun set n ->
-         match n.valu with
-         [ Dag.Left ip -> Dag.Pset.add ip set
-         | Dag.Right _ -> set ])
-      Dag.Pset.empty nl
-  in
-  (set, d)
-;
-
-value old_print_relationship_dag conf base elem_txt vbar_txt path next_txt =
-  let invert =
-    match Util.p_getenv conf.env "invert" with
-    [ Some "on" -> True
-    | _ -> False ]
-  in
-  let (set, d) = dag_of_relation_path conf base path in
-  let page_title = capitale (transl conf "relationship") in
-  let hts = Dag.make_tree_hts conf base elem_txt vbar_txt invert set [] d in
-  Dag.print_slices_menu_or_dag_page conf base page_title hts next_txt
-;
-end ELSE declare
-value old_print_relationship_dag conf base elem_txt vbar_txt path next_txt =
-  incorrect_request conf
-;
-end END;
 
 value add_common_parent base ip1 ip2 set =
   let a1 = poi base ip1 in
@@ -234,15 +58,14 @@ value ind_set_of_relation_path conf base path =
 ;
 
 value print_relationship_dag conf base elem_txt vbar_txt path next_txt =
-  if p_getenv conf.env "new" <> Some "on" then
-    old_print_relationship_dag conf base elem_txt vbar_txt path next_txt
-  else
   (* This new version is bugged: when displaying e.g. a relationship
      between a couple passing through other people, the couple family
      link is added in the dag. Result: the two persons may be displayed
      in the middle of the dag instead of its ends. Solution to be
      found. In the mean time, the "old" version is displayed by
-     default (roglo 17 Sep 2005) *)
+     default (roglo 17 Sep 2005).
+     The "old" version was no displayed any more (mehdi 22 Oct 2012).
+  *)
   let invert =
     match Util.p_getenv conf.env "invert" with
     [ Some "on" -> True
