@@ -109,10 +109,6 @@ descend.cmx: adef.cmx config.cmi dag.cmx ../dag2html/dag2html.cmx date.cmx \
     ../wserver/wserver.cmx
 diff.cmo: diff.cmi
 diff.cmx: diff.cmi
-doc.cmo: buff.cmo config.cmi hutil.cmi notesLinks.cmi secure.cmi templ.cmi \
-    templAst.cmi util.cmi wiki.cmi ../wserver/wserver.cmi
-doc.cmx: buff.cmx config.cmi hutil.cmx notesLinks.cmx secure.cmx templ.cmx \
-    templAst.cmi util.cmx wiki.cmx ../wserver/wserver.cmx
 dutil.cmo: adef.cmi dbdisk.cmi def.cmi futil.cmi mutil.cmi dutil.cmi
 dutil.cmx: adef.cmx dbdisk.cmi def.cmi futil.cmx mutil.cmx dutil.cmi
 dutil.cmi: dbdisk.cmi def.cmi
@@ -143,11 +139,11 @@ gwc2.cmx: argl.cmx db2link.cmx gwcomp.cmx lock.cmx mutil.cmx progrBar.cmx \
 gwcomp.cmo: adef.cmi calendar.cmi def.cmi mutil.cmi gwcomp.cmi
 gwcomp.cmx: adef.cmx calendar.cmx def.cmi mutil.cmx gwcomp.cmi
 gwcomp.cmi: def.cmi
-gwd.cmo: adef.cmi argl.cmo base64.cmo buff.cmo config.cmi def.cmi doc.cmo \
+gwd.cmo: adef.cmi argl.cmo base64.cmo buff.cmo config.cmi def.cmi \
     gutil.cmi hutil.cmi image.cmo lock.cmi mutil.cmi name.cmi \
     relationLink.cmi request.cmi robot.cmo secure.cmi srcfile.cmi util.cmi \
     templ.cmi version.cmo ../wserver/wserver.cmi
-gwd.cmx: adef.cmx argl.cmx base64.cmx buff.cmx config.cmi def.cmi doc.cmx \
+gwd.cmx: adef.cmx argl.cmx base64.cmx buff.cmx config.cmi def.cmi \
     gutil.cmx hutil.cmx image.cmx lock.cmx mutil.cmx name.cmx \
     relationLink.cmx request.cmx robot.cmx secure.cmx srcfile.cmx util.cmx \
     templ.cmx version.cmx ../wserver/wserver.cmx
@@ -285,7 +281,7 @@ relationLink.cmx: adef.cmx config.cmi dag.cmx date.cmx def.cmi gwdb.cmx \
 relationLink.cmi: config.cmi def.cmi gwdb.cmi
 request.cmo: adef.cmi advSearchOk.cmo alln.cmo birthDeath.cmo birthday.cmo \
     buff.cmo changeChildren.cmo config.cmi cousins.cmo dag.cmi date.cmi \
-    def.cmi descend.cmo doc.cmo forum.cmo gutil.cmi gwdb.cmi history.cmi \
+    def.cmi descend.cmo forum.cmo gutil.cmi gwdb.cmi history.cmi \
     hutil.cmi image.cmo lock.cmi merge.cmi mergeDup.cmo mergeFam.cmo \
     mergeFamOk.cmo mergeInd.cmo mergeIndOk.cmo mutil.cmi name.cmi notes.cmi \
     num.cmi perso.cmi place.cmo relation.cmo relationLink.cmi secure.cmi \
@@ -294,7 +290,7 @@ request.cmo: adef.cmi advSearchOk.cmo alln.cmo birthDeath.cmo birthday.cmo \
     wiznotes.cmi updateData.cmo ../wserver/wserver.cmi request.cmi
 request.cmx: adef.cmx advSearchOk.cmx alln.cmx birthDeath.cmx birthday.cmx \
     buff.cmx changeChildren.cmx config.cmi cousins.cmx dag.cmx date.cmx \
-    def.cmi descend.cmx doc.cmx forum.cmx gutil.cmx gwdb.cmx history.cmx \
+    def.cmi descend.cmx forum.cmx gutil.cmx gwdb.cmx history.cmx \
     hutil.cmx image.cmx lock.cmx merge.cmx mergeDup.cmx mergeFam.cmx \
     mergeFamOk.cmx mergeInd.cmx mergeIndOk.cmx mutil.cmx name.cmx notes.cmx \
     num.cmx perso.cmx place.cmx relation.cmx relationLink.cmx secure.cmx \
@@ -433,7 +429,6 @@ cousins.cmo cousins.cmx: pa_html.cmo
 dag.cmo dag.cmx: pa_html.cmo
 date.cmo date.cmx: pa_html.cmo
 descend.cmo descend.cmx: pa_html.cmo
-doc.cmo doc.cmx: pa_html.cmo
 gwc.cmo gwc.cmx: pa_lock.cmo
 gwc2.cmo gwc2.cmx: pa_lock.cmo
 gwd.cmo gwd.cmx: pa_html.cmo pa_lock.cmo
