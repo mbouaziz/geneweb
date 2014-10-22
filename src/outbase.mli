@@ -4,5 +4,4 @@
 open Dbdisk;
 
 value output : string -> dsk_base -> unit;
-value gen_output : bool -> string -> dsk_base -> unit;
 value save_mem : ref bool;
