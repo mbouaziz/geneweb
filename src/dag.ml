@@ -24,7 +24,7 @@ module Pset =
 
 (* testing *)
 
-IFDEF TESTING THEN declare
+IFDEF TESTING THEN
 value map_dag f d =
   let a =
     Array.map (fun d -> {pare = d.pare; valu = f d.valu; chil = d.chil}) d.dag
@@ -46,7 +46,7 @@ value tag_dag d =
        })
     d
 ;
-end END;
+END;
 
 (* input dag *)
 
