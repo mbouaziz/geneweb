@@ -22,9 +22,9 @@ value input_byte ioc =
   }
 ;
 
-value input_binary_int ioc = do {
+value input_binary_int32 ioc = do {
   let ret = Unix.read ioc.iofd ib 0 4 in
-  if ret <> 4 then failwith "Iochan.input_binary_int" else ();
+  if ret <> 4 then failwith "Iochan.input_binary_int32" else ();
   ioc.iopos := ioc.iopos + 4;
   let r =
     Iovalue.sign_extend (Char.code ib.[0]) lsl 24 +
@@ -45,7 +45,7 @@ value input ioc buff start len =
 
 value iochan_in_funs =
   {Iovalue.input_byte = input_byte;
-   input_binary_int = input_binary_int;
+   input_binary_int32 = input_binary_int32;
    input = input}
 ;
 
@@ -58,13 +58,13 @@ value output_byte ioc w = do {
   ioc.iopos := ioc.iopos + 1;
 };
 
-value output_binary_int ioc w = do {
+value output_binary_int32 ioc w = do {
   ib.[0] := Char.chr (w lsr 24 land 0xFF);
   ib.[1] := Char.chr (w lsr 16 land 0xFF);
   ib.[2] := Char.chr (w lsr 8 land 0xFF);
   ib.[3] := Char.chr (w land 0xFF);
   let len = Unix.write ioc.iofd ib 0 4 in
-  if len <> 4 then failwith "iochan_output_binary_int" else ();
+  if len <> 4 then failwith "iochan_output_binary_int32" else ();
   ioc.iopos := ioc.iopos + 4;
 };
 
@@ -76,7 +76,7 @@ value output ioc buff start len =
 
 value iochan_out_funs =
   {Iovalue.output_byte = output_byte;
-   output_binary_int = output_binary_int;
+   output_binary_int32 = output_binary_int32;
    output = output}
 ;
 

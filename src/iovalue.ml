@@ -16,7 +16,7 @@ value sign_extend x = (x lsl sign_extend_shift) asr sign_extend_shift;
 
 type in_funs 'a =
   { input_byte : 'a -> int;
-    input_binary_int : 'a -> int;
+    input_binary_int32 : 'a -> int;
     input : 'a -> string -> int -> int -> unit }
 ;
 
@@ -49,7 +49,7 @@ value rec input_loop ifuns ic =
         let x4 = ifuns.input_byte ic in
         Obj.magic ((sign_extend x1) lsl 24 + x2 lsl 16 + x3 lsl 8 + x4)
     | <<CODE_BLOCK32>> ->
-        let header = ifuns.input_binary_int ic in
+        let header = ifuns.input_binary_int32 ic in
         Obj.magic (input_block ifuns ic (header land 0xff) (header lsr 10))
     | <<CODE_BLOCK64>> ->
         if Sys.word_size = 64 then
@@ -61,7 +61,7 @@ value rec input_loop ifuns ic =
         let s = String.create len in
         do { ifuns.input ic s 0 len; Obj.magic s }
     | <<CODE_STRING32>> ->
-        let len = ifuns.input_binary_int ic in
+        let len = ifuns.input_binary_int32 ic in
         let s = String.create len in
         do { ifuns.input ic s 0 len; Obj.magic s }
     | code -> failwith (Printf.sprintf "input bad code 0x%x" code) ]
@@ -81,7 +81,7 @@ and input_block ifuns ic tag size =
 
 value in_channel_funs =
   {input_byte = input_byte;
-   input_binary_int = input_binary_int;
+   input_binary_int32 = input_binary_int;
    input = really_input}
 ;
 
@@ -92,7 +92,7 @@ value gen_input ifuns i = Obj.magic (input_loop ifuns i);
 
 type out_funs 'a =
   { output_byte : 'a -> int -> unit;
-    output_binary_int : 'a -> int -> unit;
+    output_binary_int32 : 'a -> int -> unit;
     output : 'a -> string -> int -> int -> unit }
 ;
 
@@ -141,7 +141,7 @@ value rec output_loop ofuns oc x =
     }
     else do {
       ofuns.output_byte oc <<CODE_INT32>>;
-      ofuns.output_binary_int oc (Obj.magic x);
+      ofuns.output_binary_int32 oc (Obj.magic x);
     }
   else
     if Obj.tag x = fun_tag then failwith "Iovalue.output <fun>"
@@ -155,7 +155,7 @@ value rec output_loop ofuns oc x =
       }
       else do {
         ofuns.output_byte oc <<CODE_STRING32>>;
-        ofuns.output_binary_int oc len;
+        ofuns.output_binary_int32 oc len;
       };
       ofuns.output oc (Obj.magic x) 0 len;
       size_32.val := size_32.val + 1 + (len + 4) / 4;
@@ -179,7 +179,7 @@ value rec output_loop ofuns oc x =
 
 value out_channel_funs =
   {output_byte = output_byte;
-   output_binary_int = output_binary_int;
+   output_binary_int32 = output_binary_int;
    output = output}
 ;
 
@@ -191,7 +191,7 @@ value output_block_header = gen_output_block_header out_channel_funs;
 
 value size_funs =
   {output_byte = fun r _ -> incr r;
-   output_binary_int = fun r _ -> r.val := r.val + 4;
+   output_binary_int32 = fun r _ -> r.val := r.val + 4;
    output = fun r _ beg len -> r.val := r.val + len - beg}
 ;
 

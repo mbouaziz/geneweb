@@ -21,7 +21,7 @@ value patch_output_value_header : out_channel -> header_pos -> int;
 
 type in_funs 'a =
   { input_byte : 'a -> int;
-    input_binary_int : 'a -> int;
+    input_binary_int32 : 'a -> int;
     input : 'a -> string -> int -> int -> unit }
 ;
 value gen_input : in_funs 'a -> 'a -> 'b;
@@ -29,7 +29,7 @@ value in_channel_funs : in_funs in_channel;
 
 type out_funs 'a =
   { output_byte : 'a -> int -> unit;
-    output_binary_int : 'a -> int -> unit;
+    output_binary_int32 : 'a -> int -> unit;
     output : 'a -> string -> int -> int -> unit }
 ;
 value gen_output : out_funs 'a -> 'a -> 'b -> unit;

@@ -226,15 +226,15 @@ value insert_person1 gen so = do {
         key_hashtbl_add gen.g_index_of_key k (Adef.iper_of_int gen.g_pcnt);
         List.iter (output_field so) gen.g_person_fields;
         Iochan.seek (fst gen.g_person_parents) (int_size * gen.g_pcnt);
-        Iochan.output_binary_int (fst gen.g_person_parents) (-1);
+        Iochan.output_binary_int32 (fst gen.g_person_parents) (-1);
         Iochan.seek (fst gen.g_person_unions) (int_size * gen.g_pcnt);
-        Iochan.output_binary_int (fst gen.g_person_unions) (-1);
+        Iochan.output_binary_int32 (fst gen.g_person_unions) (-1);
         Iochan.seek (fst gen.g_person_rparents) (int_size * gen.g_pcnt);
-        Iochan.output_binary_int (fst gen.g_person_rparents) (-1);
+        Iochan.output_binary_int32 (fst gen.g_person_rparents) (-1);
         Iochan.seek (fst gen.g_person_related) (int_size * gen.g_pcnt);
-        Iochan.output_binary_int (fst gen.g_person_related) (-1);
+        Iochan.output_binary_int32 (fst gen.g_person_related) (-1);
         Iochan.seek (fst gen.g_person_notes) (int_size * gen.g_pcnt);
-        Iochan.output_binary_int (fst gen.g_person_notes) (-1);
+        Iochan.output_binary_int32 (fst gen.g_person_notes) (-1);
         gen.g_pcnt := gen.g_pcnt + 1;
       } ]
   }
@@ -370,15 +370,15 @@ value insert_undefined2 gen key fn sn sex = do {
   in
   List.iter (output_field so) gen.g_person_fields;
   Iochan.seek (fst gen.g_person_parents) (int_size * gen.g_pcnt);
-  Iochan.output_binary_int (fst gen.g_person_parents) (-1);
+  Iochan.output_binary_int32 (fst gen.g_person_parents) (-1);
   Iochan.seek (fst gen.g_person_unions) (int_size * gen.g_pcnt);
-  Iochan.output_binary_int (fst gen.g_person_unions) (-1);
+  Iochan.output_binary_int32 (fst gen.g_person_unions) (-1);
   Iochan.seek (fst gen.g_person_rparents) (int_size * gen.g_pcnt);
-  Iochan.output_binary_int (fst gen.g_person_rparents) (-1);
+  Iochan.output_binary_int32 (fst gen.g_person_rparents) (-1);
   Iochan.seek (fst gen.g_person_related) (int_size * gen.g_pcnt);
-  Iochan.output_binary_int (fst gen.g_person_related) (-1);
+  Iochan.output_binary_int32 (fst gen.g_person_related) (-1);
   Iochan.seek (fst gen.g_person_notes) (int_size * gen.g_pcnt);
-  Iochan.output_binary_int (fst gen.g_person_notes) (-1);
+  Iochan.output_binary_int32 (fst gen.g_person_notes) (-1);
   gen.g_pcnt := gen.g_pcnt + 1;
   Adef.iper_of_int (gen.g_pcnt - 1)
 };
@@ -416,15 +416,15 @@ value get_person2 gen so sex =
     let so = if so.sex = Neuter then {(so) with sex = sex} else so in
     List.iter (output_field so) gen.g_person_fields;
     Iochan.seek (fst gen.g_person_parents) (int_size * gen.g_pcnt);
-    Iochan.output_binary_int (fst gen.g_person_parents) (-1);
+    Iochan.output_binary_int32 (fst gen.g_person_parents) (-1);
     Iochan.seek (fst gen.g_person_unions) (int_size * gen.g_pcnt);
-    Iochan.output_binary_int (fst gen.g_person_unions) (-1);
+    Iochan.output_binary_int32 (fst gen.g_person_unions) (-1);
     Iochan.seek (fst gen.g_person_rparents) (int_size * gen.g_pcnt);
-    Iochan.output_binary_int (fst gen.g_person_rparents) (-1);
+    Iochan.output_binary_int32 (fst gen.g_person_rparents) (-1);
     Iochan.seek (fst gen.g_person_related) (int_size * gen.g_pcnt);
-    Iochan.output_binary_int (fst gen.g_person_related) (-1);
+    Iochan.output_binary_int32 (fst gen.g_person_related) (-1);
     Iochan.seek (fst gen.g_person_notes) (int_size * gen.g_pcnt);
-    Iochan.output_binary_int (fst gen.g_person_notes) (-1);
+    Iochan.output_binary_int32 (fst gen.g_person_notes) (-1);
     gen.g_pcnt := gen.g_pcnt + 1;
     Adef.iper_of_int (gen.g_pcnt - 1)
   }
@@ -439,12 +439,12 @@ value get_somebody2 gen sex =
 value insert_related gen irp ip = do {
   let (ioc_acc, ioc_dat) = gen.g_person_related in
   Iochan.seek ioc_acc (int_size * Adef.int_of_iper irp);
-  let pos1 = Iochan.input_binary_int ioc_acc in
+  let pos1 = Iochan.input_binary_int32 ioc_acc in
   let pos2 = Iochan.seek_end ioc_dat in
   Iochan.output_value_no_header ioc_dat (Adef.int_of_iper ip);
   Iochan.output_value_no_header ioc_dat pos1;
   Iochan.seek ioc_acc (int_size * Adef.int_of_iper irp);
-  Iochan.output_binary_int ioc_acc pos2;
+  Iochan.output_binary_int32 ioc_acc pos2;
 };
 
 value insert_family2 gen co fath_sex moth_sex witl fo deo = do {
@@ -472,18 +472,18 @@ value insert_family2 gen co fath_sex moth_sex witl fo deo = do {
   let pos_acc_fath = pos_out (snd gen.g_person_unions) in
 
   Iochan.seek (fst gen.g_person_unions) (int_size * Adef.int_of_iper ifath);
-  let pos_data_fath = Iochan.input_binary_int (fst gen.g_person_unions) in
+  let pos_data_fath = Iochan.input_binary_int32 (fst gen.g_person_unions) in
   Iochan.seek (fst gen.g_person_unions) (int_size * Adef.int_of_iper ifath);
-  Iochan.output_binary_int (fst gen.g_person_unions) pos_acc_fath;
+  Iochan.output_binary_int32 (fst gen.g_person_unions) pos_acc_fath;
   Iovalue.output (snd gen.g_person_unions) gen.g_fcnt;
   Iovalue.output (snd gen.g_person_unions) pos_data_fath;
 
   let pos_acc_moth = pos_out (snd gen.g_person_unions) in
 
   Iochan.seek (fst gen.g_person_unions) (int_size * Adef.int_of_iper imoth);
-  let pos_data_moth = Iochan.input_binary_int (fst gen.g_person_unions) in
+  let pos_data_moth = Iochan.input_binary_int32 (fst gen.g_person_unions) in
   Iochan.seek (fst gen.g_person_unions) (int_size * Adef.int_of_iper imoth);
-  Iochan.output_binary_int (fst gen.g_person_unions) pos_acc_moth;
+  Iochan.output_binary_int32 (fst gen.g_person_unions) pos_acc_moth;
   Iovalue.output (snd gen.g_person_unions) gen.g_fcnt;
   Iovalue.output (snd gen.g_person_unions) pos_data_moth;
 
@@ -492,7 +492,7 @@ value insert_family2 gen co fath_sex moth_sex witl fo deo = do {
     (fun iper -> do {
        Iochan.seek (fst gen.g_person_parents)
          (int_size * Adef.int_of_iper iper);
-       Iochan.output_binary_int (fst gen.g_person_parents) pos_acc_parents
+       Iochan.output_binary_int32 (fst gen.g_person_parents) pos_acc_parents
      })
     children;
   Iovalue.output (snd gen.g_person_parents) gen.g_fcnt;
@@ -505,7 +505,7 @@ value insert_notes2 gen key str = do {
   let pos = pos_out (snd gen.g_person_notes) in
   Iovalue.output (snd gen.g_person_notes) str;
   Iochan.seek (fst gen.g_person_notes) (int_size * Adef.int_of_iper ip);
-  Iochan.output_binary_int (fst gen.g_person_notes) pos;
+  Iochan.output_binary_int32 (fst gen.g_person_notes) pos;
 };
 
 value map_option f =
@@ -533,7 +533,7 @@ value insert_rparents2 gen sb sex rl = do {
   let pos = pos_out (snd gen.g_person_rparents) in
   Iovalue.output (snd gen.g_person_rparents) rl;
   Iochan.seek (fst gen.g_person_rparents) (int_size * Adef.int_of_iper ip);
-  Iochan.output_binary_int (fst gen.g_person_rparents) pos;
+  Iochan.output_binary_int32 (fst gen.g_person_rparents) pos;
 };
 
 value insert_gwo_2 gen =
