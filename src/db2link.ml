@@ -33,7 +33,8 @@ type file_field 'a =
   { oc_dat : out_channel;
     oc_acc : out_channel;
     dname : string;
-    start_pos : option Iovalue.header_pos;
+    value_header : Iovalue.value_header;
+    block_header : Iovalue.block_header;
     sz32 : mutable int;
     sz64 : mutable int;
     item_cnt : mutable int;
@@ -545,10 +546,20 @@ value insert_gwo_2 gen =
   | Wnotes wizid str -> () ]
 ;
 
+value dummy_value_header = {
+  Iovalue.patch = fun _ -> assert False;
+  Iovalue.patch_reseek = fun _ -> assert False
+};
+value dummy_block_header = {
+  Iovalue.can_resize_to = fun _ -> assert False;
+  Iovalue.resize = fun _ -> assert False
+};
+
 value open_out_field_unknown_size d valu = do {
   let oc_dat = open_out_bin (Filename.concat d "data1") in
   let oc_acc = open_out_bin (Filename.concat d "access1") in
-  {oc_dat = oc_dat; oc_acc = oc_acc; dname = d; start_pos = None;
+  {oc_dat = oc_dat; oc_acc = oc_acc; dname = d;
+   value_header = dummy_value_header; block_header = dummy_block_header;
    sz32 = 0; sz64 = 0; item_cnt = 0; valu = valu}
 };
 
@@ -558,16 +569,16 @@ value close_out_field_known_size pad ff = do {
 
   (* making input_value header of "data" file, and copying "data1" file *)
   let oc_dat = open_out_bin (Filename.concat ff.dname "data") in
-  let start_pos = Iovalue.create_output_value_header oc_dat in
+  let value_header = Iovalue.create_output_value_header oc_dat in
   Iovalue.size_32.val := ff.sz32;
   Iovalue.size_64.val := ff.sz64;
-  Iovalue.output_block_header oc_dat 0 ff.item_cnt;
+  let _ = Iovalue.output_block_header oc_dat 0 ff.item_cnt in
   let acc_shift = pos_out oc_dat in
   let fname1 = Filename.concat ff.dname "data1" in
   let ic_dat = open_in_bin fname1 in
   try while True do { output_byte oc_dat (input_byte ic_dat) } with
   [ End_of_file -> () ];
-  let _ : int = Iovalue.patch_output_value_header oc_dat start_pos in
+  value_header.Iovalue.patch ();
   close_out oc_dat;
   close_in ic_dat;
   Sys.remove fname1;
@@ -594,10 +605,10 @@ value close_out_field_known_size pad ff = do {
 value open_out_field d len valu = do {
   let oc_dat = open_out_bin (Filename.concat d "data2") in
   let oc_acc = open_out_bin (Filename.concat d "access2") in
-  let start_pos = Iovalue.create_output_value_header oc_dat in
-  Iovalue.output_block_header oc_dat 0 (max len Db2out.phony_min_size);
+  let value_header = Iovalue.create_output_value_header oc_dat in
+  let block_header = Iovalue.output_block_header oc_dat 0 len in
   assert (pos_out oc_dat = Db2.first_item_pos len);
-  {oc_dat = oc_dat; oc_acc = oc_acc; start_pos = Some start_pos;
+  {oc_dat = oc_dat; oc_acc = oc_acc; value_header = value_header; block_header = block_header;
    dname = d; sz32 = Iovalue.size_32.val; sz64 = Iovalue.size_64.val;
    item_cnt = 0; valu = valu}
 };
@@ -606,19 +617,12 @@ value open_out_field d len valu = do {
 value close_out_field pad ff len = do {
   close_out ff.oc_acc;
   ff.item_cnt := len;
-  for i = ff.item_cnt + 1 to Db2out.phony_min_size do {
-    output_item (ff.valu pad) ff;
-  };
   Iovalue.size_32.val := ff.sz32;
   Iovalue.size_64.val := ff.sz64;
-  let start_pos =
-    match ff.start_pos with
-    [ Some s -> s
-    | None -> assert False ]
-  in
-  ignore (Iovalue.patch_output_value_header ff.oc_dat start_pos : int);
-  Iovalue.output_block_header ff.oc_dat 0 ff.item_cnt;
-  assert (pos_out ff.oc_dat = Db2.first_item_pos ff.item_cnt);
+  ff.value_header.Iovalue.patch ();
+  assert (ff.block_header.Iovalue.can_resize_to ff.item_cnt);
+  ff.block_header.Iovalue.resize ff.item_cnt;
+  (* assert (pos_out ff.oc_dat = Db2.first_item_pos ff.item_cnt); *)
   close_out ff.oc_dat;
   (* test *)
   Db2out.check_input_value "Db2link.close_out_field"
@@ -654,7 +658,7 @@ value no_family empty_string ifam =
 value pad_fam = no_family "" (Adef.ifam_of_int 0);
 
 value compress_type_string len field_d e ic = do {
-  Db2out.output_value_array_compress field_d e len ""
+  Db2out.output_value_array_compress field_d e len
     (fun oc_acc output_item -> do {
        seek_in ic (Db2.first_item_pos len);
        try

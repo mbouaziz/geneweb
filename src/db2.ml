@@ -3,8 +3,9 @@
 
 value first_item_pos len =
   20 +
-  if Sys.word_size = 64 && len >= 1 lsl (32 - 10) then 9
-  else 5
+  if len < 8 then 1
+  else if len < 1 lsl 22 then 5
+  else 9
 ;
 
 type key2 =

@@ -95,30 +95,51 @@ type out_funs 'a =
 value size_32 = ref 0;
 value size_64 = ref 0;
 
-value gen_output_block_header ofuns oc tag size =
-  do {
+type block_header = {
+  can_resize_to : int -> bool;
+  resize : int -> unit
+};
+
+value gen_output_block_header ofuns oc tag =
+  let output_small_block_header size = do {
+    ofuns.output_byte oc (<<PREFIX_SMALL_BLOCK>> + tag + size lsl 4);
+  } in
+  let output_block32_header size = do {
+    ofuns.output_byte oc <<CODE_BLOCK32>>;
+    ofuns.output_byte oc (size lsr 14 land 0xFF);
+    ofuns.output_byte oc (size lsr 6 land 0xFF);
+    ofuns.output_byte oc (size lsl 2 land 0xFF);
+    ofuns.output_byte oc (size lsl 10 land 0xFF + tag);
+  } in
+  let output_block64_header size = do {
     let hd = size lsl 10 + tag in
-    if tag < 16 && size < 8 then
-      ofuns.output_byte oc (<<PREFIX_SMALL_BLOCK>> + tag + size lsl 4)
-    else if Sys.word_size = 64 && hd >= 1 lsl 32 then do {
-      ofuns.output_byte oc <<CODE_BLOCK64>>;
-      for i = 1 to 8 do {
-        ofuns.output_byte oc (hd lsr (64 - 8 * i) land 0xFF);
-      };
-    }
-    else do {
-      ofuns.output_byte oc <<CODE_BLOCK32>>;
-      (* hd = size << 10 + tag *)
-      ofuns.output_byte oc (size lsr 14 land 0xFF);
-      ofuns.output_byte oc (size lsr 6 land 0xFF);
-      ofuns.output_byte oc (size lsl 2 land 0xFF);
-      ofuns.output_byte oc (size lsl 10 land 0xFF + tag);
+    ofuns.output_byte oc <<CODE_BLOCK64>>;
+    for i = 1 to 8 do {
+      ofuns.output_byte oc (hd lsr (64 - 8 * i) land 0xFF);
     };
+  } in
+  fun size -> do {
     if size = 0 then ()
     else do {
       size_32.val := size_32.val + 1 + size;
       size_64.val := size_64.val + 1 + size;
+    };
+    if tag < 16 && size < 8 then do {
+      output_small_block_header size;
+      { can_resize_to = fun size -> size < 8;
+        resize = output_small_block_header }
     }
+    else
+      if size < 1 lsl 22 then do {
+        output_block32_header size;
+        { can_resize_to = fun size -> size < 1 lsl 22;
+          resize = output_block32_header }
+      }
+      else do {
+        output_block64_header size;
+        { can_resize_to = fun _ -> True;
+          resize = output_block64_header }
+      }
   }
 ;
 
@@ -169,7 +190,7 @@ value rec output_loop ofuns oc x =
     else if Obj.tag x = Obj.out_of_heap_tag then
       failwith "Iovalue.output: abstract value (outside heap)"
     else do {
-      gen_output_block_header ofuns oc (Obj.tag x) (Obj.size x);
+      ignore (gen_output_block_header ofuns oc (Obj.tag x) (Obj.size x));
       (* last case of "for" separated, to make more tail recursive cases
          when last field is itself, to prevent some stacks overflows *)
       if Obj.size x > 0 then do {
@@ -200,10 +221,9 @@ value size_funs =
    output = fun r _ beg len -> r.val := r.val + len - beg}
 ;
 
-value size = ref 0;
-
 value size v =
-  do { size.val := 0; gen_output size_funs size v; size.val }
+  let size = ref 0 in
+  do { gen_output size_funs size v; size.val }
 ;
 
 (* Digest *)
@@ -301,28 +321,9 @@ value output_array_access oc arr_get arr_len pos =
 
 (* *)
 
-type header_pos = (int * int);
-
 value intext_magic_number = [| 0x84; 0x95; 0xA6; 0xBE |];
 
-value create_output_value_header oc = do {
-  (* magic number *)
-  for i = 0 to 3 do { output_byte oc intext_magic_number.(i); };
-  let pos_header = pos_out oc in
-  (* room for block length *)
-  output_binary_int oc 0;
-  (* room for obj counter *)
-  output_binary_int oc 0;
-  (* room for size_32 *)
-  output_binary_int oc 0;
-  (* room for size_64 *)
-  output_binary_int oc 0;
-  size_32.val := 0;
-  size_64.val := 0;
-  (pos_header, pos_out oc)
-};
-
-value patch_output_value_header oc (pos_header, pos_start) = do {
+value patch_output_value_header oc pos_header pos_start reseek = do {
   let pos_end = pos_out oc in
   if Sys.word_size = 64 &&
      (pos_end >= 1 lsl 32 ||
@@ -339,5 +340,29 @@ value patch_output_value_header oc (pos_header, pos_start) = do {
   output_binary_int oc size_32.val;
   (* size_64 *)
   output_binary_int oc size_64.val;
-  pos_end;
+  if reseek then do { seek_out oc pos_end; } else ();
+};
+
+type value_header = {
+  patch: unit -> unit;
+  patch_reseek: unit -> unit
+};
+
+value create_output_value_header oc = do {
+  (* magic number *)
+  for i = 0 to 3 do { output_byte oc intext_magic_number.(i); };
+  let pos_header = pos_out oc in
+  (* room for block length *)
+  output_binary_int oc 0;
+  (* room for obj counter *)
+  output_binary_int oc 0;
+  (* room for size_32 *)
+  output_binary_int oc 0;
+  (* room for size_64 *)
+  output_binary_int oc 0;
+  size_32.val := 0;
+  size_64.val := 0;
+  let pos_start = pos_out oc in
+  { patch = fun () -> patch_output_value_header oc pos_header pos_start False;
+    patch_reseek = fun () -> patch_output_value_header oc pos_header pos_start True }
 };

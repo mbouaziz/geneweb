@@ -23,16 +23,16 @@ value anonfun s =
   else raise (Arg.Bad "Cannot treat several databases")
 ;
 
-value rebuild_field_array db2 len pad bdir compress f = do {
+value rebuild_field_array db2 len bdir compress f = do {
   if Mutil.verbose.val then do {
     eprintf "rebuilding %s..." (Filename.basename bdir);
     flush stderr;
   }
   else ();
   if compress then
-    Db2out.output_value_array_compress bdir "" len pad f
+    Db2out.output_value_array_compress bdir "" len f
   else
-    Db2out.output_value_array_no_compress bdir "" len pad f;
+    Db2out.output_value_array_no_compress bdir "" len f;
   if Mutil.verbose.val then do {
     eprintf "\n";
     flush stderr
@@ -47,16 +47,14 @@ type field_info 'index 'item =
     fi_dir : string }
 ;
 
-value rebuild_any_field_array db2 fi pad compress (f2, get) = do {
+value rebuild_any_field_array db2 fi compress (f2, get) = do {
   let f1 = fi.fi_dir in
   let bdir =
     List.fold_left Filename.concat db2.Db2disk.bdir2 ["new_d"; f1; f2]
   in
   Mutil.mkdir_p bdir;
-  rebuild_field_array db2 fi.fi_nb pad bdir compress
+  rebuild_field_array db2 fi.fi_nb bdir compress
     (fun oc_acc output_item -> do {
-       (* put pad as 1st elem; not necessary, just for beauty *)
-       if compress then ignore (output_item pad : int) else ();
        for i = 0 to fi.fi_nb - 1 do {
          let x =
            try get (Hashtbl.find fi.fi_ht (fi.fi_index_of_int i)) with
@@ -70,13 +68,13 @@ value rebuild_any_field_array db2 fi pad compress (f2, get) = do {
      })
 };
 
-value rebuild_option_field_array db2 fi pad (f2, get) = do {
+value rebuild_option_field_array db2 fi (f2, get) = do {
   let f1 = fi.fi_dir in
   let bdir =
     List.fold_left Filename.concat db2.Db2disk.bdir2 ["new_d"; f1; f2]
   in
   Mutil.mkdir_p bdir;
-  rebuild_field_array db2 fi.fi_nb pad bdir True
+  rebuild_field_array db2 fi.fi_nb bdir True
     (fun oc_acc output_item ->
         for i = 0 to fi.fi_nb - 1 do {
           let x =
@@ -189,26 +187,8 @@ value rebuild_list2_field_array db2 fi (f2, get) = do {
 
 };
 
-value rebuild_string_field db2 fi (f2, get) = do {
-  let f1 = fi.fi_dir in
-  let bdir =
-    List.fold_left Filename.concat db2.Db2disk.bdir2 ["new_d"; f1; f2]
-  in
-  Mutil.mkdir_p bdir;
-  rebuild_field_array db2 fi.fi_nb "" bdir True
-    (fun oc_acc output_item -> do {
-       for i = 0 to fi.fi_nb - 1 do {
-         let s =
-           try get (Hashtbl.find fi.fi_ht (fi.fi_index_of_int i)) with
-           [ Not_found ->
-               let pos = Db2disk.get_field_acc db2 i (f1, f2) in
-               Db2disk.string_of_istr2 db2 (f1, f2) pos ]
-         in
-         let pos = output_item s in
-         output_binary_int oc_acc pos;
-       };
-     })
-};
+value rebuild_string_field db2 fi (f2, get) =
+ rebuild_any_field_array db2 fi True (f2, get);
 
 value rebuild_list_with_string_field_array g h db2 fi (f2, get) = do {
   let f1 = fi.fi_dir in
@@ -217,7 +197,7 @@ value rebuild_list_with_string_field_array g h db2 fi (f2, get) = do {
   in
   Mutil.mkdir_p bdir;
   let oc_ext = open_out_bin (Filename.concat bdir "data2.ext") in
-  rebuild_field_array db2 fi.fi_nb "" bdir True
+  rebuild_field_array db2 fi.fi_nb bdir True
     (fun oc_acc output_item -> do {
        for i = 0 to fi.fi_nb - 1 do {
          let sl =
@@ -337,8 +317,7 @@ value rebuild_fields2 db2 = do {
      ("burial_src", fun p -> p.Def.burial_src);
      ("notes", fun p -> p.Def.notes);
      ("psources", fun p -> p.Def.psources)];
-  rebuild_any_field_array db2 fi_per 0 True
-    ("occ", fun p -> p.Def.occ);
+  rebuild_any_field_array db2 fi_per True ("occ", fun p -> p.Def.occ);
   List.iter
     (rebuild_list_with_string_field_array (fun f -> f) (fun f -> f) db2
        fi_per)
@@ -351,23 +330,16 @@ value rebuild_fields2 db2 = do {
     ("titles", fun p -> p.Def.titles);
   rebuild_list_field_array db2 fi_per ("rparents", fun p -> p.Def.rparents);
   rebuild_list2_field_array db2 fi_per ("related", fun p -> p.Def.related);
-  rebuild_any_field_array db2 fi_per Def.Neuter True
-    ("sex", fun p -> p.Def.sex);
-  rebuild_any_field_array db2 fi_per Def.IfTitles True
-    ("access", fun p -> p.Def.access);
-  List.iter (rebuild_any_field_array db2 fi_per Adef.codate_None True)
+  rebuild_any_field_array db2 fi_per True ("sex", fun p -> p.Def.sex);
+  rebuild_any_field_array db2 fi_per True ("access", fun p -> p.Def.access);
+  List.iter (rebuild_any_field_array db2 fi_per True)
     [("birth", fun p -> p.Def.birth);
      ("baptism", fun p -> p.Def.baptism)];
-  rebuild_any_field_array db2 fi_per Def.NotDead True
-    ("death", fun p -> p.Def.death);
-  rebuild_any_field_array db2 fi_per Def.UnknownBurial True
-    ("burial", fun p -> p.Def.burial);
-  rebuild_option_field_array db2 fi_asc (Adef.ifam_of_int (-1))
-    ("parents", fun p -> p.Def.parents);
-  rebuild_any_field_array db2 fi_asc Adef.no_consang False
-    ("consang", fun p -> p.Def.consang);
-  rebuild_any_field_array db2 fi_uni [| |] False
-    ("family", fun p -> p.Def.family);
+  rebuild_any_field_array db2 fi_per True ("death", fun p -> p.Def.death);
+  rebuild_any_field_array db2 fi_per True ("burial", fun p -> p.Def.burial);
+  rebuild_option_field_array db2 fi_asc ("parents", fun p -> p.Def.parents);
+  rebuild_any_field_array db2 fi_asc False ("consang", fun p -> p.Def.consang);
+  rebuild_any_field_array db2 fi_uni False ("family", fun p -> p.Def.family);
 
   let fi_fam =
     {fi_nb = db2.Db2disk.patches.Db2disk.nb_fam;
@@ -384,25 +356,20 @@ value rebuild_fields2 db2 = do {
      fi_ht = db2.Db2disk.patches.Db2disk.h_descend;
      fi_index_of_int = Adef.ifam_of_int; fi_dir = "family"}
   in
-  rebuild_any_field_array db2 fi_fam Adef.codate_None True
-    ("marriage", fun f -> f.Def.marriage);
+  rebuild_any_field_array db2 fi_fam True ("marriage", fun f -> f.Def.marriage);
   List.iter (rebuild_string_field db2 fi_fam)
     [("marriage_place", fun f -> f.Def.marriage_place);
      ("marriage_src", fun f -> f.Def.marriage_src);
      ("comment", fun f -> f.Def.comment);
      ("origin_file", fun f -> f.Def.origin_file);
      ("fsources", fun f -> f.Def.fsources)];
-  rebuild_any_field_array db2 fi_fam [| |] True
-    ("witnesses", fun f -> f.Def.witnesses);
-  rebuild_any_field_array db2 fi_fam Def.Married True
-    ("relation", fun f -> f.Def.relation);
-  rebuild_any_field_array db2 fi_fam Def.NotDivorced True
-    ("divorce", fun f -> f.Def.divorce);
-  List.iter (rebuild_any_field_array db2 fi_cpl (Adef.iper_of_int (-1)) True)
+  rebuild_any_field_array db2 fi_fam True ("witnesses", fun f -> f.Def.witnesses);
+  rebuild_any_field_array db2 fi_fam True ("relation", fun f -> f.Def.relation);
+  rebuild_any_field_array db2 fi_fam True ("divorce", fun f -> f.Def.divorce);
+  List.iter (rebuild_any_field_array db2 fi_cpl True)
     [("father", fun f -> Adef.father f);
      ("mother", fun f -> Adef.mother f)];
-  rebuild_any_field_array db2 fi_des [| |] False
-    ("children", fun f -> f.Def.children);
+  rebuild_any_field_array db2 fi_des False ("children", fun f -> f.Def.children);
 
   let nb_per = fi_per.fi_nb in
 

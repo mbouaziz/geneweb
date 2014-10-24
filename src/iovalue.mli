@@ -11,10 +11,12 @@ value sign_extend : int -> int;
 
 (* making a header for input_value like output_value does *)
 
-type header_pos = 'abstract;
+type value_header = {
+  patch: unit -> unit;
+  patch_reseek: unit -> unit
+};
 
-value create_output_value_header : out_channel -> header_pos;
-value patch_output_value_header : out_channel -> header_pos -> int;
+value create_output_value_header : out_channel -> value_header;
 
 (* generic functions *)
 
@@ -32,7 +34,12 @@ type out_funs 'a =
 ;
 value gen_output : out_funs 'a -> 'a -> 'b -> unit;
 
-value output_block_header : out_channel -> int -> int -> unit;
+type block_header = {
+  can_resize_to : int -> bool;
+  resize : int -> unit
+};
+
+value output_block_header : out_channel -> int -> int -> block_header;
 value size_32 : ref int;
 value size_64 : ref int;
 

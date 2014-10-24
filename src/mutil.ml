@@ -262,13 +262,12 @@ value strip_all_trailing_spaces s =
 ;
 
 value output_array_no_sharing oc arr_get arr_len = do {
-  let header_pos = Iovalue.create_output_value_header oc in
-  Iovalue.output_block_header oc 0 arr_len;
+  let value_header = Iovalue.create_output_value_header oc in
+  let _ = Iovalue.output_block_header oc 0 arr_len in
   for i = 0 to arr_len - 1 do {
     Iovalue.output oc (arr_get i);
   };
-  let pos_end = Iovalue.patch_output_value_header oc header_pos in
-  seek_out oc pos_end;
+  value_header.Iovalue.patch_reseek ();
 };
 
 value roman_of_arabian n =

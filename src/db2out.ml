@@ -2,8 +2,6 @@
 (* $Id: db2out.ml,v 5.28 2012-01-27 17:14:03 ddr Exp $ *)
 (* Copyright (c) 2007 INRIA *)
 
-value phony_min_size = 8;
-
 value check_input_value func fname len = do {
 ()
 (*
@@ -26,26 +24,21 @@ value output_item_no_compress_return_pos oc_dat item_cnt s = do {
   pos
 };
 
-value output_value_array_no_compress bdir e len pad f = do {
+value output_value_array_no_compress bdir e len f = do {
   let oc_acc = open_out_bin (Filename.concat bdir ("access" ^ e)) in
   let oc_dat = open_out_bin (Filename.concat bdir ("data" ^ e)) in
-  let header_pos = Iovalue.create_output_value_header oc_dat in
-  Iovalue.output_block_header oc_dat 0 (max len phony_min_size);
+  let value_header = Iovalue.create_output_value_header oc_dat in
+  let _ = Iovalue.output_block_header oc_dat 0 len in
   assert (pos_out oc_dat = Db2.first_item_pos len);
   let nb_items = ref 0 in
   f oc_acc (output_item_no_compress_return_pos oc_dat nb_items);
-  (* padding to at least 8 items to allow correct read by input_value *)
-  for i = nb_items.val + 1 to 8 do {
-    incr nb_items;
-    Iovalue.output oc_dat (pad : 'a);
-  };
-  assert (Db2.first_item_pos nb_items.val = Db2.first_item_pos len);
-  let _ : int = Iovalue.patch_output_value_header oc_dat header_pos in
+  assert (nb_items.val = len);
+  value_header.Iovalue.patch ();
   close_out oc_dat;
   close_out oc_acc;
   (* test *)
   check_input_value "Db2out.output_value_array_no_compress"
-    (Filename.concat bdir ("data" ^ e)) (max len phony_min_size);
+    (Filename.concat bdir ("data" ^ e)) len;
 };
 
 value output_item_compress_return_pos oc_dat ht item_cnt s =
@@ -59,27 +52,23 @@ value output_item_compress_return_pos oc_dat ht item_cnt s =
     } ]
 ;
 
-value output_value_array_compress bdir e _ pad f = do {
+value output_value_array_compress bdir e max_len f = do {
   let oc_acc = open_out_bin (Filename.concat bdir ("access" ^ e)) in
   let oc_dat = open_out_bin (Filename.concat bdir ("data" ^ e)) in
   let ht : Hashtbl.t 'a _ = Hashtbl.create 1 in
-  let header_pos = Iovalue.create_output_value_header oc_dat in
-  let len = phony_min_size in
-  Iovalue.output_block_header oc_dat 0 len;
-  assert (pos_out oc_dat = Db2.first_item_pos len);
+  let value_header = Iovalue.create_output_value_header oc_dat in
+  (* since we are compressing, try first with at most array_max_size (= 2^22 - 1 on 32-bits) elements *)
+  let initial_len = min max_len 0x3fffff in
+  let block_header = Iovalue.output_block_header oc_dat 0 initial_len in
+  assert (pos_out oc_dat = Db2.first_item_pos initial_len);
   let nb_items = ref 0 in
   f oc_acc (output_item_compress_return_pos oc_dat ht nb_items);
-  (* padding to at least 8 items to allow correct read by input_value *)
-  for i = nb_items.val + 1 to 8 do {
-    incr nb_items;
-    Iovalue.output oc_dat (pad : 'a);
-  };
-  if Db2.first_item_pos nb_items.val = Db2.first_item_pos len then do {
-    Iovalue.size_32.val := Iovalue.size_32.val - len + nb_items.val;
-    Iovalue.size_64.val := Iovalue.size_64.val - len + nb_items.val;
-    let _ : int = Iovalue.patch_output_value_header oc_dat header_pos in
-  Iovalue.output_block_header oc_dat 0 nb_items.val;
-  assert (pos_out oc_dat = Db2.first_item_pos nb_items.val);
+  if block_header.Iovalue.can_resize_to nb_items.val then do {
+    Iovalue.size_32.val := Iovalue.size_32.val - initial_len + nb_items.val;
+    Iovalue.size_64.val := Iovalue.size_64.val - initial_len + nb_items.val;
+    value_header.Iovalue.patch ();
+    block_header.Iovalue.resize nb_items.val;
+    assert (pos_out oc_dat = Db2.first_item_pos initial_len);
     close_out oc_dat;
     close_out oc_acc;
     (* test *)
@@ -87,11 +76,11 @@ value output_value_array_compress bdir e _ pad f = do {
     check_input_value "Db2out.output_value_array_compress"
       fname nb_items.val;
   }
-  else if Db2.first_item_pos nb_items.val > Db2.first_item_pos len then do {
+  else do {
+    (* there was actually more than array_max_size elements *)
     (* may happen one day and to be debugged then *)
     Printf.eprintf "nb_items %d\n" nb_items.val;
-    Printf.eprintf "first_item_pos nb_items %d\n"
-      (Db2.first_item_pos nb_items.val);
+    Printf.eprintf "first_item_pos nb_items %d\n" (Db2.first_item_pos nb_items.val);
     flush stderr;
     Printf.eprintf "rebuilding it...";
     flush stderr;
@@ -100,12 +89,12 @@ value output_value_array_compress bdir e _ pad f = do {
     let fname = Filename.concat bdir ("data" ^ e) in
     let ic = open_in_bin fname in
     let oc = open_out_bin (fname ^ "2") in
-    let header_pos = Iovalue.create_output_value_header oc in
-    Iovalue.output_block_header oc 0 nb_items.val;
-    seek_in ic (Db2.first_item_pos len);
+    let value_header = Iovalue.create_output_value_header oc in
+    let _ = Iovalue.output_block_header oc 0 nb_items.val in
+    seek_in ic (Db2.first_item_pos initial_len);
     try while True do { output_byte oc (input_byte ic) } with
     [ End_of_file -> () ];
-    let _ : int = Iovalue.patch_output_value_header oc header_pos in
+    value_header.Iovalue.patch ();
     close_out oc;
     close_in ic;
     Mutil.remove_file fname;
@@ -116,7 +105,6 @@ value output_value_array_compress bdir e _ pad f = do {
     check_input_value "Db2out.output_value_array_compress 1"
       fname nb_items.val;
   }
-  else assert False;
 };
 
 type hashtbl_t 'a 'b =
@@ -145,10 +133,10 @@ value output_hashtbl dir file ht = do {
   else ();
   output_binary_int oc_hta (Array.length ht.data);
 
-  let pos_start = Iovalue.create_output_value_header oc_ht in
-  Iovalue.output_block_header oc_ht 0 (Obj.size (Obj.repr ht));
+  let value_header = Iovalue.create_output_value_header oc_ht in
+  let _ = Iovalue.output_block_header oc_ht 0 (Obj.size (Obj.repr ht)) in
   Iovalue.output oc_ht ht.size;
-  Iovalue.output_block_header oc_ht 0 (Array.length ht.data);
+  let _ = Iovalue.output_block_header oc_ht 0 (Array.length ht.data) in
   for i = 0 to Array.length ht.data - 1 do {
     assert
       (Obj.is_int (Obj.repr ht.data.(i)) &&
@@ -163,7 +151,7 @@ value output_hashtbl dir file ht = do {
   else ();
   if Obj.size (Obj.repr ht) >= 4 then Iovalue.output oc_ht ht.initial_size
   else ();
-  let _ : int = Iovalue.patch_output_value_header oc_ht pos_start in
+  value_header.Iovalue.patch ();
 
   close_out oc_hta;
   close_out oc_ht;
