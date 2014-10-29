@@ -1,10 +1,21 @@
 (* camlp5r ./pa_lock.cmo *)
-(* $Id: gwc.ml,v 5.66 2008-01-14 16:47:00 ddr Exp $ *)
-(* Copyright (c) 1998-2007 INRIA *)
+(* $Id: gwc.ml,v 5.68 2008-01-15 11:06:04 ddr Exp $ *)
+(* Copyright (c) 2006-2007 INRIA *)
 
 open Gwcomp;
 open Printf;
 
+(* ******************************************************************** *)
+(*  [Fonc] check_magic : string -> in_channel -> unit                   *)
+(** [Description] : Vérifie le header du fichier passé en paramètre tel
+                    que défini par magic_gwo
+    [Args] :
+      - fname : nom du fichier.
+      - ic : descripteur du fichier.
+    [Retour] : Si le header n'est pas compatible, on quite en lançant
+               une exception Failure suivie du message d'erreur.
+    [Rem] : Non exporté en clair hors de ce module.                     *)
+(* ******************************************************************** *)
 value check_magic =
   let b = String.create (String.length magic_gwo) in
   fun fname ic ->
@@ -39,6 +50,7 @@ value next_family_fun_templ gwo_list fi = do {
   in
   let ic_opt = ref None in
   let gwo_list = ref gwo_list in
+  fi.Db2link.f_sep_file_inx := 0;
   fun () ->
     loop () where rec loop () =
       let r =
@@ -52,6 +64,7 @@ value next_family_fun_templ gwo_list fi = do {
             | None -> do {
                 close_in ic;
                 ic_opt.val := None;
+                fi.Db2link.f_sep_file_inx := fi.Db2link.f_sep_file_inx + 1;
                 None
               } ]
         | None -> None ]
@@ -65,11 +78,11 @@ value next_family_fun_templ gwo_list fi = do {
               gwo_list.val := rest;
               let ic = open_in_bin x in
               check_magic x ic;
-              fi.Db1link.f_curr_src_file := input_value ic;
-              fi.Db1link.f_curr_gwo_file := x;
-              fi.Db1link.f_separate := separate;
-              fi.Db1link.f_shift := shift;
-              Hashtbl.clear fi.Db1link.f_local_names;
+              fi.Db2link.f_curr_src_file := input_value ic;
+              fi.Db2link.f_curr_gwo_file := x;
+              fi.Db2link.f_separate := separate;
+              fi.Db2link.f_has_separates :=
+                fi.Db2link.f_has_separates || separate;
               ic_opt.val := Some ic;
               loop ();
             }
@@ -89,25 +102,31 @@ value separate = ref False;
 value shift = ref 0;
 value files = ref [];
 
+(* ******************************************************************** *)
+(*  [Var] speclist : (string * Arg.spec * string) list                  *)
+(** [Description] : Positionne les variables en fonction des options
+                    données à gwc
+    [Rem] : Non exporté en clair hors de ce module.                     *)
+(* ******************************************************************** *)
 value speclist =
   [("-c", Arg.Set just_comp, "Only compiling");
    ("-o", Arg.String (fun s -> out_file.val := s),
     "<file> Output database (default: a.gwb)");
    ("-f", Arg.Set force, " Remove database if already existing");
-   ("-stats", Arg.Set Db1link.pr_stats, "Print statistics");
-   ("-nc", Arg.Clear Db1link.do_check, "No consistency check");
-   ("-cg", Arg.Set Db1link.do_consang, "Compute consanguinity");
+   ("-stats", Arg.Set Db2link.pr_stats, "Print statistics");
+   ("-nc", Arg.Clear Db2link.do_check, "No consistency check");
+   ("-cg", Arg.Set Db2link.do_consang, "Compute consanguinity");
    ("-sep", Arg.Set separate, " Separate all persons in next file");
    ("-sh", Arg.Int (fun x -> shift.val := x),
     "<int> Shift all persons numbers in next files");
-   ("-ds", Arg.String (fun s -> Db1link.default_source.val := s), "\
+   ("-ds", Arg.String (fun s -> Db2link.default_source.val := s), "\
      <str> Set the source field for persons and families without source data");
-   ("-part", Arg.String (fun s -> Db1link.particules_file.val := s), "\
+   ("-part", Arg.String (fun s -> Db2link.particules_file.val := s), "\
      <file> Particles file (default = predefined particles)");
-   ("-mem", Arg.Set Outbase.save_mem, " Save memory, but slower");
+   ("-mem", Arg.Unit (fun () -> ()), " (obsolete option)");
    ("-nolock", Arg.Set Lock.no_lock_flag, " do not lock database.");
    ("-nofail", Arg.Set Gwcomp.no_fail, " no failure in case of error.");
-   ("-nopicture", Arg.Set Gwcomp.no_picture, " do not create associative pictures");
+   ("-nopicture", Arg.Set Gwcomp.no_picture, " do not create associative pictures"); 
    ("-q", Arg.Clear Mutil.verbose, " no verbose");
    ("-v", Arg.Set Mutil.verbose, " verbose")]
 ;
@@ -132,6 +151,14 @@ where [files] are a list of files:
 and [options] are:"
 ;
 
+(* ******************************************************************** *)
+(*  [Fonc] main : unit -> unit                                          *)
+(** [Description] : Fonction principale de création d'une base au 
+                    format gwb2.
+    [Args] : Néant.
+    [Retour] : Néant.
+    [Rem] : Non exporté en clair hors de ce module.                     *)
+(* ******************************************************************** *)
 value main () =
   do {
     Mutil.verbose.val := False;
@@ -171,7 +198,7 @@ The database \"%s\" already exists. Use option -f to overwrite it.
             else out_file.val ^ ".gwb"
           in
           let next_family_fun = next_family_fun_templ (List.rev gwo.val) in
-          if Db1link.link next_family_fun bdir then ()
+          if Db2link.link next_family_fun bdir then ()
           else do {
             eprintf "*** database not created\n";
             flush stderr;
@@ -187,11 +214,11 @@ The database \"%s\" already exists. Use option -f to overwrite it.
   }
 ;
 
-value print_exc =
-  fun
-  [ Failure txt ->
-      do { printf "Failed: %s\n" txt; flush stdout; exit 2 }
-  | exc -> Printexc.catch raise exc ]
+value print_failure = fun
+  [ Failure txt -> Some (Printf.sprintf "Failed: %s\n" txt)
+  | _ -> None ]
 ;
 
-try main () with exc -> print_exc exc;
+Printexc.register_printer print_failure;
+
+Printexc.print main ();
