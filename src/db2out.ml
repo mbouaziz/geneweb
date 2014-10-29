@@ -138,13 +138,14 @@ value output_hashtbl dir file ht = do {
   Iovalue.output oc_ht ht.size;
   let _ = Iovalue.output_block_header oc_ht 0 (Array.length ht.data) in
   for i = 0 to Array.length ht.data - 1 do {
-    assert
-      (Obj.is_int (Obj.repr ht.data.(i)) &&
-       Obj.magic ht.data.(i) = 0 ||
-       Obj.is_block (Obj.repr ht.data.(i)) &&
-       Obj.tag (Obj.repr ht.data.(i)) = 0 &&
-       Obj.size (Obj.repr ht.data.(i)) = 3);
-    output_binary_int oc_hta (pos_out oc_ht);
+    assert (Obj.is_int (Obj.repr ht.data.(i)) && Obj.magic ht.data.(i) = 0
+           || Obj.is_block (Obj.repr ht.data.(i)) && Obj.tag (Obj.repr ht.data.(i)) = 0
+             && Obj.size (Obj.repr ht.data.(i)) = 3);
+    let pos = match ht.data.(i) with
+    [ Empty -> -1
+    | Cons _ _ _ -> pos_out oc_ht ]
+    in
+    output_binary_int oc_hta pos;
     Iovalue.output oc_ht ht.data.(i);
   };
   if Obj.size (Obj.repr ht) >= 3 then Iovalue.output oc_ht ht.seed
