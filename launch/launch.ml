@@ -811,4 +811,4 @@ value main () = do {
   eprintf "Bye\n"; flush stderr;
 };
 
-Printexc.catch main ();
+Printexc.print main ();

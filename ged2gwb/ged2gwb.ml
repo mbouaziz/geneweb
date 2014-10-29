@@ -2756,19 +2756,18 @@ The database \"%s\" already exists. Use option -f to overwrite it.
     finish_base base arrays;
 *)
     warning_month_number_dates ();
-    if log_oc.val != stdout then close_out log_oc.val else ()
   }
 ;
 
-try main () with e ->
-  let e =
-    match e with
-    [ Ploc.Exc _ e -> e
-    |  _ -> e ]
-  in
-  do {
-    fprintf log_oc.val "Uncaught exception: %s\n"
-      (Printexc.to_string e);
-    if log_oc.val != stdout then close_out log_oc.val else ();
-    exit 2
-  };
+value close_log_oc () = if log_oc.val != stdout then close_out log_oc.val else ();
+
+Pervasives.at_exit close_log_oc;
+
+value print_ploc_exc = fun
+  [ Ploc.Exc _ e -> Some (Printexc.to_string e)
+  | _ -> None ]
+;
+
+Printexc.register_printer print_ploc_exc;
+
+Printexc.print main ();

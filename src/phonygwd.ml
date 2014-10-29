@@ -63,11 +63,11 @@ value main () =
   }
 ;
 
-try main () with
-[ Unix.Unix_error err fun_name arg ->
-    do {
-      Printf.eprintf "Error: \"%s\", %s\n" fun_name (Unix.error_message err);
-      flush stderr;
-      exit 1
-    }
-| exc -> Printexc.catch raise exc ];
+value print_unix_error = fun
+  [ Unix.Unix_error err fun_name _arg -> Some (Printf.sprintf "Error: \"%s\", %s\n" fun_name (Unix.error_message err))
+  | _ -> None ]
+;
+
+Printexc.register_printer print_failure;    
+
+Printexc.print main ();

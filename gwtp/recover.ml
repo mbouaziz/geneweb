@@ -20,8 +20,4 @@ value main () =
   }
 ;
 
-try main () with exc ->
-  do {
-    eprintf "Exception raised: %s\n" (Printexc.to_string exc);
-    flush stderr;
-  };
+Printexc.print main ();

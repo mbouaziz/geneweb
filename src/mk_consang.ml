@@ -485,4 +485,4 @@ value main () = do {
   } ];
 };
 
-Printexc.catch main ();
+Printexc.print main ();

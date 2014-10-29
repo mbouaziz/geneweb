@@ -2099,54 +2099,32 @@ Print the failed passwords in log (except if option -digest is set) ");
 value test_eacces_bind err fun_name =
   IFDEF UNIX THEN
     if err = Unix.EACCES && fun_name = "bind" then
-      try
-        do {
-          eprintf "
+      Some (Printf.sprintf "
 Error: invalid access to the port %d: users port number less than 1024
 are reserved to the system. Solution: do it as root or choose another port
 number greater than 1024.
-" selected_port.val;
-          flush stderr;
-          True
-        }
-      with
-      [ Not_found -> False ]
-    else False
-  ELSE False END
+" selected_port.val)
+    else None
+  ELSE None END
 ;
 
-value print_exc exc =
-  match exc with
+value print_unix_error = fun
   [ Unix.Unix_error Unix.EADDRINUSE "bind" _ ->
-      do {
-        eprintf "\nError: ";
-        eprintf "the port %d" selected_port.val;
-        eprintf " \
+    Some (Printf.sprintf "\nError: the port %d \
 is already used by another GeneWeb daemon
 or by another program. Solution: kill the other program or launch
 GeneWeb with another port number (option -p)
-";
-        flush stderr;
-      }
+" selected_port.val)
   | Unix.Unix_error err fun_name arg ->
-      if test_eacces_bind err fun_name then ()
-      else do {
-        prerr_string "\"";
-        prerr_string fun_name;
-        prerr_string "\" failed";
-        if String.length arg > 0 then do {
-          prerr_string " on \""; prerr_string arg; prerr_string "\""; ()
-        }
-        else ();
-        prerr_string ": ";
-        prerr_endline (Unix.error_message err);
-        flush stderr;
-      }
-  | _ ->
-      do {
-        eprintf "%s\n" (Printexc.to_string exc);
-        flush stderr
-      } ]
+      match test_eacces_bind err fun_name with
+      [ None -> Some (Printf.sprintf "\"%s\" failed%s: %s\n"
+                        fun_name
+                        (if String.length arg > 0 then " on \"" ^ arg ^ "\"" else "")
+                        (Unix.error_message err))
+      | x -> x ]
+  | _ -> None ]
 ;
 
-try main () with exc -> print_exc exc;
+Printexc.register_printer print_unix_error;
+
+Printexc.print main ();
