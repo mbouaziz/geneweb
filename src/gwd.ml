@@ -18,6 +18,7 @@ value friend_passwd = ref "";
 value wizard_just_friend = ref False;
 value only_addresses = ref [];
 value cgi = ref False;
+value fastcgi = ref False;
 value default_lang = ref "fr";
 value setup_link = ref False;
 value choose_browser_lang = ref False;
@@ -1133,7 +1134,7 @@ value authorization cgi from_addr request base_env passwd access_type utm
           utm base_file command ]
 ;
 
-value make_conf cgi from_addr (addr, request) script_name contents env = do {
+value make_conf cgi fastcgi from_addr (addr, request) script_name contents env = do {
   let utm = Unix.time () in
   let tm = Unix.localtime utm in
   let (command, base_file, passwd, env, access_type) =
@@ -1249,7 +1250,10 @@ value make_conf cgi from_addr (addr, request) script_name contents env = do {
      friend = ar.ar_friend || wizard_just_friend && ar.ar_wizard;
      just_friend_wizard = ar.ar_wizard && wizard_just_friend;
      user = ar.ar_user; username = ar.ar_name;
-     auth_scheme = ar.ar_scheme; cgi = cgi; command = ar.ar_command;
+     auth_scheme = ar.ar_scheme;
+     cgi = cgi;
+     fastcgi = fastcgi;
+     command = ar.ar_command;
      indep_command = (if cgi then ar.ar_command else "geneweb") ^ "?";
      pure_xhtml =
        try List.assoc "pure_xhtml" env = "on" with
@@ -1425,9 +1429,9 @@ value no_access conf =
   }
 ;
 
-value conf_and_connection cgi from (addr, request) script_name contents env =
+value conf_and_connection cgi fastcgi from (addr, request) script_name contents env =
   let (conf, sleep, passwd_err) =
-    make_conf cgi from (addr, request) script_name contents env
+    make_conf cgi fastcgi from (addr, request) script_name contents env
   in
   match redirected_addr.val with
   [ Some addr -> print_redirected conf from request addr
@@ -1704,7 +1708,7 @@ value build_env request contents =
   else (contents, Util.create_env contents)
 ;
 
-value connection cgi (addr, request) script_name contents =
+value connection cgi fastcgi (addr, request) script_name contents =
   let from =
     match addr with
     [ Unix.ADDR_UNIX x -> x
@@ -1730,7 +1734,7 @@ value connection cgi (addr, request) script_name contents =
           if image_request cgi script_name env then ()
           else if misc_request cgi script_name then ()
           else
-            conf_and_connection cgi from (addr, request) script_name contents
+            conf_and_connection cgi fastcgi from (addr, request) script_name contents
               env
         with
         [ Adef.Request_failure msg -> print_request_failure cgi msg
@@ -1793,7 +1797,7 @@ Type %s to stop the service
     }
     else ();
     Wserver.f selected_addr.val selected_port.val conn_timeout.val
-      (IFDEF UNIX THEN max_clients.val ELSE None END) (connection False)
+      (IFDEF UNIX THEN max_clients.val ELSE None END) (connection False False)
   }
 ;
 
@@ -1841,8 +1845,12 @@ value geneweb_cgi addr script_name contents =
     let request = add "accept-language" "HTTP_ACCEPT_LANGUAGE" request in
     let request = add "referer" "HTTP_REFERER" request in
     let request = add "user-agent" "HTTP_USER_AGENT" request in
-    connection True (Unix.ADDR_UNIX addr, request) script_name contents
+    connection True False (Unix.ADDR_UNIX addr, request) script_name contents
   }
+;
+
+value geneweb_fastcgi_server () =
+  failwith "TODO: fastcgi server"
 ;
 
 value read_input len =
@@ -1951,7 +1959,8 @@ value main () =
        ("-wd", Arg.String make_cnt_dir, "\
 <dir>
        Directory for socket communication (Windows) and access count.");
-       ("-cgi", Arg.Set cgi, "\n       Force cgi mode.");
+       ("-cgi", Arg.Set cgi, "\n       Force CGI mode.");
+       ("-fastcgi", Arg.Set fastcgi, "\n       Force FastCGI mode.");
        ("-images_url", Arg.String (fun x -> Util.images_url.val := x),
         "<url>\n       URL for GeneWeb images (default: gwd send them)");
        ("-images_dir", Arg.String (fun x -> images_dir.val := x), "\
@@ -2004,8 +2013,10 @@ value main () =
         string_of_int Robot.min_disp_req.val ^ ")");
        ("-login_tmout", Arg.Int (fun x -> login_timeout.val := x), "\
 <sec>
-       Login timeout for entries with passwords in CGI mode (default " ^ string_of_int login_timeout.val ^ "\
-s)"); ("-redirect", Arg.String (fun x -> redirected_addr.val := Some x), "\
+       Login timeout for entries with passwords in CGI/FastCGI mode (default "
+         ^ string_of_int login_timeout.val ^ "\
+s)");
+       ("-redirect", Arg.String (fun x -> redirected_addr.val := Some x), "\
 <addr>
        Send a message to say that this service has been redirected to <addr>");
        ("-trace_failed_passwd", Arg.Set trace_failed_passwd, "\n       \
@@ -2016,7 +2027,7 @@ Print the failed passwords in log (except if option -digest is set) ");
          [("-max_clients", Arg.Int (fun x -> max_clients.val := Some x), "\
 <num>
        Max number of clients treated at the same time (default: no limit)
-       (not cgi).");
+       (not CGI).");
           ("-conn_tmout", Arg.Int (fun x -> conn_timeout.val := x),
            "<sec>\n       Connection timeout (default " ^
              string_of_int conn_timeout.val ^ "s; 0 means no limit)");
@@ -2075,11 +2086,13 @@ Print the failed passwords in log (except if option -digest is set) ");
     Wserver.stop_server.val :=
       List.fold_left Filename.concat Util.cnt_dir.val ["cnt"; "STOP_SERVER"]
     ;
-    let (query, cgi) =
-      try (Sys.getenv "QUERY_STRING", True) with
-      [ Not_found -> ("", cgi.val) ]
+    let (query, cgi, fastcgi) =
+      try (Sys.getenv "QUERY_STRING", True, False) with
+      [ Not_found -> ("", cgi.val, fastcgi.val) ]
     in
-    if cgi then
+    if fastcgi then
+      geneweb_fastcgi_server ()
+    else if cgi then
       let is_post =
         try Sys.getenv "REQUEST_METHOD" = "POST" with [ Not_found -> False ]
       in
