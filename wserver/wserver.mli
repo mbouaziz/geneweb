@@ -76,6 +76,8 @@ value stop_server : ref string;
        or absolute path. *)
 value noproc : ref bool;
 
+value fastcgi : ref bool;
+
 (* Example:
 
    - Source program "foo.ml":

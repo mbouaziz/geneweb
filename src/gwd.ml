@@ -1849,8 +1849,30 @@ value geneweb_cgi addr script_name contents =
   }
 ;
 
+value fastcgi_connection (addr, original_request) script_name contents =
+  let add k x request =
+    match Wserver.extract_param (x ^ "=") '\n' original_request with
+      [ "" -> request
+      | v -> [k ^ ": " ^ v :: request] ]
+  in
+  let request = [] in
+  let request = add "cookie" "HTTP_COOKIE" request in
+  let request = add "content-type" "CONTENT_TYPE" request in
+  let request = add "accept-language" "HTTP_ACCEPT_LANGUAGE" request in
+  let request = add "referer" "HTTP_REFERER" request in
+  let request = add "user-agent" "HTTP_USER_AGENT" request in
+  connection True True (addr, request) script_name contents
+;
+
 value geneweb_fastcgi_server () =
-  failwith "TODO: fastcgi server"
+  do {
+    try Unix.mkdir (Filename.concat Util.cnt_dir.val "cnt") 0o755 with
+    [ Unix.Unix_error _ _ _ -> () ];
+    Wserver.fastcgi.val := True;
+    (* TODO? handle FCGI_WEB_SERVER_ADDRS *)
+    Wserver.f selected_addr.val selected_port.val conn_timeout.val
+      (IFDEF UNIX THEN max_clients.val ELSE None END) fastcgi_connection
+  }
 ;
 
 value read_input len =
@@ -2089,6 +2111,7 @@ Print the failed passwords in log (except if option -digest is set) ");
     let (query, cgi, fastcgi) =
       try (Sys.getenv "QUERY_STRING", True, False) with
       [ Not_found -> ("", cgi.val, fastcgi.val) ]
+    (* TODO: automatically detect FastCGI *)
     in
     if fastcgi then
       geneweb_fastcgi_server ()

@@ -7,6 +7,7 @@ value sock_in = ref "wserver.sin";
 value sock_out = ref "wserver.sou";
 value stop_server = ref "STOP_SERVER";
 value noproc = ref False;
+value fastcgi = ref False;
 
 value wserver_sock = ref Unix.stdout;
 value wsocket () = wserver_sock.val;
@@ -15,10 +16,117 @@ value wserver_oc = ref stdout;
 
 value wrap_string = ref (fun s -> s);
 
-value wprint fmt =
-  ksprintf (fun s -> output_string wserver_oc.val (wrap_string.val s)) fmt
+value fastcgi_buffer = Buffer.create 0;
+value fastcgi_requestId = ref 0;
+
+value fastcgi_padLen = 8;
+
+value fastcgi_pad = String.make fastcgi_padLen (Char.chr 0);
+
+type fastcgi_header = {
+  typ : int;
+  reqId : int;
+  contentLength : int;
+  paddingLength : int
+};
+
+value fastcgi_write_message_header typ reqId contentLength =
+  do {
+    assert (typ >= 0 && typ <= 0xff);
+    assert (reqId >= 0 && reqId <= 0xffff);
+    assert (contentLength >= 0 && contentLength <= 0xffff);
+    let oc = wserver_oc.val in
+    output_char oc (Char.chr 1); (* FastCGI version *)
+    output_char oc (Char.chr typ);
+    output_char oc (Char.chr (reqId asr 8));
+    output_char oc (Char.chr (reqId land 0xff));
+    output_char oc (Char.chr (contentLength asr 8));
+    output_char oc (Char.chr (contentLength land 0xff));
+    output_char oc (Char.chr (if contentLength mod fastcgi_padLen = 0 then 0 else fastcgi_padLen - contentLength mod fastcgi_padLen)); (* padding length *)
+    output_char oc (Char.chr 0) (* reserved *)
+  }
 ;
-value wflush () = flush wserver_oc.val;
+
+value fastcgi_write_endrequest_body appStatus protStatus =
+  do {
+    assert (protStatus >= 0 && protStatus <= 0xff);
+    let oc = wserver_oc.val in
+    output_char oc (Char.chr ((appStatus asr 24) land 0xff));
+    output_char oc (Char.chr ((appStatus asr 16) land 0xff));
+    output_char oc (Char.chr ((appStatus asr 8) land 0xff));
+    output_char oc (Char.chr (appStatus land 0xff));
+    output_char oc (Char.chr protStatus);
+    output_substring oc fastcgi_pad 0 3
+  }
+;
+
+value fastcgi_write_buffer () =
+  do {
+    let buflen = Buffer.length fastcgi_buffer in
+    fastcgi_write_message_header 6 fastcgi_requestId.val buflen;
+    if buflen mod fastcgi_padLen > 0 then
+      Buffer.add_substring fastcgi_buffer fastcgi_pad 0 (fastcgi_padLen - buflen mod fastcgi_padLen)
+    else ();
+    Buffer.output_buffer wserver_oc.val fastcgi_buffer;
+    Buffer.clear fastcgi_buffer
+  }
+;
+
+value rec fastcgi_add_substring s start len =
+  do {
+    let remlen = 0xffff - (Buffer.length fastcgi_buffer) in
+    if len >= remlen then
+      do {
+        Buffer.add_substring fastcgi_buffer s start remlen;
+        fastcgi_write_buffer ();
+        if len > remlen then
+          fastcgi_add_substring s (start + remlen) (len - remlen)
+        else ();
+      }
+    else
+     Buffer.add_substring fastcgi_buffer s start len
+  }
+;
+
+value fastcgi_add_string s =
+  let s = wrap_string.val s in
+  fastcgi_add_substring s 0 (String.length s)
+;
+
+value wprint fmt =
+  if fastcgi.val then
+    ksprintf fastcgi_add_string fmt
+  else
+    ksprintf (fun s -> output_string wserver_oc.val (wrap_string.val s)) fmt
+;
+
+value fastcgi_flush () =
+  do {
+    if Buffer.length fastcgi_buffer > 0 then
+      do {
+        fastcgi_write_buffer ();
+        flush wserver_oc.val
+      }
+    else ();
+  }
+;
+
+value wflush () =
+  if fastcgi.val then
+    fastcgi_flush ()
+  else
+    flush wserver_oc.val
+;
+
+value fastcgi_endrequest appStatus protStatus =
+  do {
+    fastcgi_flush ();
+    fastcgi_write_buffer (); (* write an empty buffer to mark the end of stdout *)
+    fastcgi_write_message_header 3 fastcgi_requestId.val 8;
+    fastcgi_write_endrequest_body appStatus protStatus;
+    flush wserver_oc.val
+  }
+;
 
 value hexa_digit x =
   if x >= 10 then Char.chr (Char.code 'A' + x - 10)
@@ -267,19 +375,120 @@ value timeout tmout spid _ =
 ;
 END;
 
+value stream_read len strm =
+  String.init len get_next_char
+    where get_next_char _ =
+      match strm with parser
+      [ [: `x :] -> x
+      | [: :] -> ' ' ]
+;
+
 value get_request_and_content strm =
   let request = get_request strm in
   let content =
     match extract_param "content-length: " ' ' request with
     [ "" -> ""
-    | x -> String.init (int_of_string x) get_next_char
-      where get_next_char _ =
-        match strm with parser
-        [ [: `x :] -> x
-        | [: :] -> ' ' ]
-    ]
+    | x -> stream_read (int_of_string x) strm ]
   in
   (request, content)
+;
+
+type fastcgi_begin_request_body = {
+  role : int;
+  keepConnection : bool;
+  params : list (string * string);
+  stdin : string
+};
+
+value fastcgi_requests = Hashtbl.create 10;
+
+value fastcgi_get_header =
+  parser
+  [ [: `version; `typ; `reqIdB1; `reqIdB0; `contLenB1; `contLenB0; `padLen; `_; _ :] ->
+    if Char.code version <> 1 then
+      failwith "FastCGI: not version 1"
+    else
+      { typ = Char.code typ;
+        reqId = Char.code reqIdB1 * 256 + Char.code reqIdB0;
+        contentLength = Char.code contLenB1 * 256 + Char.code contLenB0;
+        paddingLength = Char.code padLen }
+  | [: :] -> failwith "FastCGI: wrong header size" ]
+;
+
+value fastcgi_parse_variable_length =
+  parser
+  [ [: `c when Char.code c < 0x80 :] -> Char.code c
+  | [: `c3; `c2; `c1; `c0 :] -> ((Char.code c3 land 0x7f) lsl 24)
+                              + (Char.code c2 lsl 16)
+                              + (Char.code c1 lsl 8)
+                              + Char.code c0 ]
+;
+
+value rec fastcgi_parse_params =
+  parser
+  [ [: nl = fastcgi_parse_variable_length;
+       vl = fastcgi_parse_variable_length;
+       s :] -> let name = stream_read nl s in
+               let v = stream_read vl s in
+               [ (name, v) :: (fastcgi_parse_params s) ]
+  | [: :] -> [] ]
+;
+
+value fastcgi_read_message strm =
+  let header = fastcgi_get_header strm in
+  let cont = stream_read header.contentLength strm in
+  let _ = stream_read header.paddingLength strm in
+  if header.typ = 1 then do { (* begin request *)
+    if header.contentLength < 3 then
+      failwith "FastCGI: wrong BeginRequest body size"
+    else ();
+    let role = Char.code cont.[0] * 256 + Char.code cont.[1] in
+    let flags = Char.code cont.[2] in
+    let request = { role = role;
+                    keepConnection = flags land 1 <> 0;
+                    params = [];
+                    stdin = "" } in
+    if Hashtbl.mem fastcgi_requests header.reqId then
+      failwith "FastCGI: a request with the same id already exists and has not been ended yet"
+    else ();
+    Hashtbl.add fastcgi_requests header.reqId request;
+    None
+  }
+  else if header.typ = 4 then do { (* params *)
+    let req = Hashtbl.find fastcgi_requests header.reqId in (* fails if no request with this id has begun yet *)
+    let params = fastcgi_parse_params (Stream.of_string cont) in
+    let req = { (req) with params = req.params @ params } in
+    Hashtbl.replace fastcgi_requests header.reqId req;
+    None
+  }
+  else if header.typ = 5 then do { (* stdin *)
+    let req = Hashtbl.find fastcgi_requests header.reqId in (* fails if no request with this id has begun yet *)
+    if header.contentLength = 0 then do {
+      Hashtbl.remove fastcgi_requests header.reqId;
+      fastcgi_requestId.val := header.reqId;
+      Some req (* the request is ready to be processed *)
+    } else do {
+      let req = { (req) with stdin = req.stdin ^ cont } in
+      Hashtbl.replace fastcgi_requests header.reqId req;
+      (* TODO? use content-length instead *)
+      None
+    }
+  }
+  else if header.typ = 2 then do { (* abort request *)
+    Hashtbl.remove fastcgi_requests header.reqId;
+    (* TODO: reply with END_REQUEST, id, REQUEST_COMPLETE *)
+    None
+  }
+  else 
+    (* TODO: handle management records (GET_VALUES) *)
+    (* TODO: reply with FCGI_UnknownTypeRecord *)
+    failwith "FastCGI: unknown type"
+;
+
+value rec fastcgi_get_request_and_content strm =
+  match fastcgi_read_message strm with
+    [ None -> fastcgi_get_request_and_content strm
+    | Some req -> (req.params, req.stdin) ]
 ;
 
 value string_of_sockaddr =
@@ -310,32 +519,46 @@ value treat_connection tmout callback addr fd = do {
     else ()
   ELSE () END END;
   let (request, script_name, contents) =
-    let (request, contents) =
-      let strm =
-        let c = Bytes.create 1 in
-        Stream.from
-          (fun _ -> if Unix.read fd c 0 1 = 1 then Some (Bytes.get c 0) else None)
+    let strm =
+      let c = Bytes.create 1 in
+      Stream.from
+        (fun _ -> if Unix.read fd c 0 1 = 1 then Some (Bytes.get c 0) else None)
+    in
+    if fastcgi.val then
+      let (params, contents) = try fastcgi_get_request_and_content strm with
+      [ e -> do { print_err_exc e; raise e } ] in
+      let script_name = try List.assoc "SCRIPT_NAME" params with
+        [ Not_found -> Sys.argv.(0) ] in
+      let request = List.map (fun (k, v) -> k ^ "=" ^ v) params in
+      let contents =
+        if contents = "" then
+          try List.assoc "QUERY_STRING" params with [ Not_found -> "" ]
+        else
+          contents in
+      (request, script_name, contents)
+    else
+      let (request, contents) = get_request_and_content strm in
+      let (script_name, contents) =
+        match extract_param "GET /" ' ' request with
+          [ "" -> (extract_param "POST /" ' ' request, contents)
+          | str ->
+            try
+              let i = String.index str '?' in
+              (String.sub str 0 i,
+               String.sub str (i + 1) (String.length str - i - 1))
+            with
+              [ Not_found -> (str, "") ] ]
       in
-      get_request_and_content strm
-    in
-    let (script_name, contents) =
-      match extract_param "GET /" ' ' request with
-      [ "" -> (extract_param "POST /" ' ' request, contents)
-      | str ->
-          try
-            let i = String.index str '?' in
-            (String.sub str 0 i,
-             String.sub str (i + 1) (String.length str - i - 1))
-          with
-          [ Not_found -> (str, "") ] ]
-    in
-    (request, script_name, contents)
+      (request, script_name, contents)
   in
   try callback (addr, request) script_name contents with
   [ Unix.Unix_error Unix.EPIPE "write" _ -> ()
   | Sys_error "Broken pipe" -> ()
   | exc -> print_err_exc exc ];
   try wflush () with _ -> ();
+  if fastcgi.val then
+    try fastcgi_endrequest 0 0 with [ e -> print_err_exc e ]
+  else ();
   try flush stderr with _ -> ();
 };
 
