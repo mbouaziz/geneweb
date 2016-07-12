@@ -2,6 +2,10 @@ ROOT := .
 
 include $(ROOT)/tools/Makefile.common
 
+.PHONY: ocamlbuild-all
+ocamlbuild-all:
+	ocamlbuild -verbose 1 $(foreach flag,$(OCAMLP5F),-ppflag $(flag)) src/gwd.native
+
 # ALL: directories needed to make distribution
 ALL_TARGETS := wserver dag2html src ged2gwb gwb2ged setup gwtp
 # EVERYTHING: any other maintained project

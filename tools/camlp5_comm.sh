@@ -6,7 +6,9 @@ FILE=
 while [ -n "$1" ]; do
     case $1 in
     *.ml*) FILE=$1;;
-    -o) OUTPUT=$2; ARGS="$ARGS $1";;
+    -o) OUTPUT=$2;
+        ARGS="$ARGS $1 $2";
+        shift;;
     *) ARGS="$ARGS $1";;
     esac
     shift
